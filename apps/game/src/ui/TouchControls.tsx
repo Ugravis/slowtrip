@@ -128,6 +128,7 @@ export function TouchControls({ input, mode }: { input: Input; mode: PlayerMode 
           <>
             <HoldButton label="Brake" onChange={(held) => input.setTouchBrake(held)} />
             <ActionButton input={input} action="reset" label="Reset" />
+            <ActionButton input={input} action="toggleView" label="View" />
           </>
         ) : (
           <>

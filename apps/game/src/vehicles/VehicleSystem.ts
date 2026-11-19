@@ -20,7 +20,11 @@ const _cp = { x: 0, y: 0, z: 0 }
 
 export interface VehicleEntity {
   vehicle: Vehicle
+  /** Rendered with the interpolated pose; read it for cameras. */
   mesh: THREE.Mesh
+  /** Pose before the last physics step (for interpolation). */
+  prevPos: THREE.Vector3
+  prevRot: THREE.Quaternion
 }
 
 /** Owns vehicles: physics, chassis meshes (1 draw call each) and all wheels (1 instanced draw call). */
@@ -50,10 +54,20 @@ export class VehicleSystem {
     mesh.matrixAutoUpdate = false
     mesh.name = spec.id
     this.group.add(mesh)
-    const entity = { vehicle, mesh }
+    const entity: VehicleEntity = {
+      vehicle,
+      mesh,
+      prevPos: new THREE.Vector3(x, y, z),
+      prevRot: new THREE.Quaternion(0, Math.sin(yaw / 2), 0, Math.cos(yaw / 2)),
+    }
     this.entities.push(entity)
     this.wheels.count = this.entities.length * 4
     return entity
+  }
+
+  entityOf(vehicle: Vehicle): VehicleEntity | null {
+    for (const entity of this.entities) if (entity.vehicle === vehicle) return entity
+    return null
   }
 
   /** Freezes vehicles standing on chunks without a collider; wakes them when ground is ready. */
@@ -67,19 +81,38 @@ export class VehicleSystem {
 
   /** Physics pre-step: only `driven` receives controls, others stay parked. */
   step(dt: number, driven: Vehicle | null, controls: DriveControls): void {
-    for (const { vehicle } of this.entities) {
+    for (const { vehicle, prevPos, prevRot } of this.entities) {
+      const t = vehicle.body.translation()
+      const r = vehicle.body.rotation()
+      prevPos.set(t.x, t.y, t.z)
+      prevRot.set(r.x, r.y, r.z, r.w)
       vehicle.step(dt, vehicle === driven ? controls : null)
     }
   }
 
-  /** Copies physics transforms to meshes and wheel instances. */
-  sync(): void {
-    for (let v = 0; v < this.entities.length; v++) {
-      const { vehicle, mesh } = this.entities[v] as VehicleEntity
+  /** Snaps interpolation to the current pose (after teleports and origin shifts). */
+  resetInterpolation(): void {
+    for (const { vehicle, prevPos, prevRot } of this.entities) {
       const t = vehicle.body.translation()
       const r = vehicle.body.rotation()
-      mesh.position.set(t.x, t.y, t.z)
-      mesh.quaternion.set(r.x, r.y, r.z, r.w)
+      prevPos.set(t.x, t.y, t.z)
+      prevRot.set(r.x, r.y, r.z, r.w)
+    }
+  }
+
+  /**
+   * Copies physics transforms to meshes and wheel instances, interpolated between the
+   * last two physics steps by `alpha` (smooth motion on high refresh rate displays).
+   */
+  sync(alpha: number): void {
+    for (let v = 0; v < this.entities.length; v++) {
+      const { vehicle, mesh, prevPos, prevRot } = this.entities[v] as VehicleEntity
+      const t = vehicle.body.translation()
+      const r = vehicle.body.rotation()
+      _p.set(t.x, t.y, t.z)
+      mesh.position.copy(prevPos).lerp(_p, alpha)
+      _q.set(r.x, r.y, r.z, r.w)
+      mesh.quaternion.copy(prevRot).slerp(_q, alpha)
       mesh.updateMatrix()
 
       const c = vehicle.controller
