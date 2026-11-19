@@ -15,14 +15,6 @@
 
 <!-- Issue, roadmap step, or discussion. -->
 
-## Performance impact
-
-<!-- Rule #1. Draw calls, triangles, allocations, frame time, bundle size. Write "None" if not applicable. -->
-
-## How to test
-
-1.
-
 ## Checklist
 
 - [ ] Title follows Conventional Commits (`type(scope): subject`)
