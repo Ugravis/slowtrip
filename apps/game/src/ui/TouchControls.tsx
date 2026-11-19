@@ -1,7 +1,9 @@
 import { useRef, type PointerEvent as ReactPointerEvent } from 'react'
 import type { Input, InputAction } from '../core/input'
+import type { PlayerMode } from '../game/store'
 
 const STICK_RADIUS = 50
+const LOOK_SCALE = 2.2
 
 /** Virtual joystick: writes into `input.stick`, moves its knob via a ref (no React state). */
 function Joystick({ input }: { input: Input }) {
@@ -93,13 +95,47 @@ export function HoldButton({
   )
 }
 
-export function TouchControls({ input }: { input: Input }) {
+/** Drag anywhere outside the stick and buttons to look around. */
+function LookZone({ input }: { input: Input }) {
+  const last = useRef<{ id: number; x: number; y: number } | null>(null)
+  return (
+    <div
+      className="look-zone"
+      onPointerDown={(e) => {
+        last.current = { id: e.pointerId, x: e.clientX, y: e.clientY }
+        e.currentTarget.setPointerCapture(e.pointerId)
+      }}
+      onPointerMove={(e) => {
+        const l = last.current
+        if (!l || l.id !== e.pointerId) return
+        input.addLook((e.clientX - l.x) * LOOK_SCALE, (e.clientY - l.y) * LOOK_SCALE)
+        l.x = e.clientX
+        l.y = e.clientY
+      }}
+      onPointerUp={() => (last.current = null)}
+      onPointerCancel={() => (last.current = null)}
+    />
+  )
+}
+
+export function TouchControls({ input, mode }: { input: Input; mode: PlayerMode }) {
   return (
     <div className="touch-layer">
+      <LookZone input={input} />
       <Joystick input={input} />
       <div className="touch-buttons">
-        <HoldButton label="Brake" onChange={(held) => input.setTouchBrake(held)} />
-        <ActionButton input={input} action="reset" label="Reset" />
+        {mode === 'driving' ? (
+          <>
+            <HoldButton label="Brake" onChange={(held) => input.setTouchBrake(held)} />
+            <ActionButton input={input} action="reset" label="Reset" />
+          </>
+        ) : (
+          <>
+            <HoldButton label="Run" onChange={(held) => input.setTouchSprint(held)} />
+            <ActionButton input={input} action="jump" label="Jump" />
+          </>
+        )}
+        <ActionButton input={input} action="interact" label="Use" />
       </div>
     </div>
   )

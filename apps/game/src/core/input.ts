@@ -32,24 +32,47 @@ export class Input {
 
   private readonly onKeyDown = (e: KeyboardEvent) => {
     if (e.repeat) return
-    this.keys.add(e.code)
-    const action = KEY_ACTIONS[e.code]
+    const code = keyCode(e)
+    this.keys.add(code)
+    const action = KEY_ACTIONS[code]
     if (action) this.pending.add(action)
-    if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault()
+    if (code === 'Space' || code.startsWith('Arrow')) e.preventDefault()
   }
 
   private readonly onKeyUp = (e: KeyboardEvent) => {
-    this.keys.delete(e.code)
+    this.keys.delete(keyCode(e))
   }
 
   private readonly onBlur = () => {
     this.keys.clear()
   }
 
+  private readonly onMouseMove = (e: MouseEvent) => {
+    if (document.pointerLockElement) this.addLook(e.movementX, e.movementY)
+  }
+
   constructor(private readonly target: Window = window) {
     target.addEventListener('keydown', this.onKeyDown)
     target.addEventListener('keyup', this.onKeyUp)
     target.addEventListener('blur', this.onBlur)
+    target.addEventListener('mousemove', this.onMouseMove)
+  }
+
+  /** Locks the mouse on click (desktop first-person look). */
+  attachPointerLock(element: HTMLElement): () => void {
+    const onClick = () => {
+      if (!document.pointerLockElement && window.matchMedia('(pointer: fine)').matches) {
+        void element.requestPointerLock()
+      }
+    }
+    element.addEventListener('click', onClick)
+    return () => element.removeEventListener('click', onClick)
+  }
+
+  /** Drops unconsumed edge actions so they never fire late. Call at the end of each frame. */
+  endFrame(): void {
+    this.pending.clear()
+    this.consumeLook()
   }
 
   /** Recomputes axes from keys and the touch stick. Call once per frame before systems. */
@@ -106,6 +129,15 @@ export class Input {
     this.target.removeEventListener('keyup', this.onKeyUp)
     this.target.removeEventListener('blur', this.onBlur)
   }
+}
+
+/** Physical key code, falling back to `key` when `code` is empty (some virtual keyboards). */
+function keyCode(e: KeyboardEvent): string {
+  if (e.code) return e.code
+  const k = e.key
+  if (k.length === 1 && /[a-z]/i.test(k)) return `Key${k.toUpperCase()}`
+  if (k === ' ') return 'Space'
+  return k
 }
 
 function clamp1(v: number): number {

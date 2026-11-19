@@ -81,7 +81,7 @@ body,
   right: max(20px, env(safe-area-inset-right));
   bottom: max(24px, env(safe-area-inset-bottom));
   display: grid;
-  grid-template-columns: repeat(2, 64px);
+  grid-template-columns: repeat(3, 64px);
   gap: 12px;
 }
 
@@ -95,6 +95,40 @@ body,
   font:
     600 12px system-ui,
     sans-serif;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.hud-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 22%;
+  transform: translateX(-50%);
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 35%);
+  white-space: nowrap;
+}
+
+.hud-hint:empty {
+  display: none;
+}
+
+.crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 80%);
+  box-shadow: 0 0 2px rgb(0 0 0 / 60%);
+}
+
+.look-zone {
+  position: absolute;
+  inset: 0;
   pointer-events: auto;
   touch-action: none;
 }
