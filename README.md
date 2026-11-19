@@ -45,51 +45,51 @@ packages/
 
 ### Game (`apps/game`)
 
-| Concern         | Choice                                                          |
-| --------------- | --------------------------------------------------------------- |
-| Build           | Vite                                                            |
-| UI              | React                                                           |
-| 3D rendering    | Three.js via React Three Fiber (`@react-three/fiber`, `@react-three/drei`) |
-| Physics         | Rapier (`@dimforge/rapier3d-compat`)                            |
-| Noise           | `simplex-noise` + seeded PRNG                                   |
-| Workers         | Web Workers + `comlink` (terrain, roads, scatter)               |
-| State           | Zustand (transient updates for hot paths)                       |
-| Local cache     | IndexedDB via Dexie (offline play, sync queue)                  |
+| Concern      | Choice                                                                     |
+| ------------ | -------------------------------------------------------------------------- |
+| Build        | Vite                                                                       |
+| UI           | React                                                                      |
+| 3D rendering | Three.js via React Three Fiber (`@react-three/fiber`, `@react-three/drei`) |
+| Physics      | Rapier (`@dimforge/rapier3d-compat`)                                       |
+| Noise        | `simplex-noise` + seeded PRNG                                              |
+| Workers      | Web Workers + `comlink` (terrain, roads, scatter)                          |
+| State        | Zustand (transient updates for hot paths)                                  |
+| Local cache  | IndexedDB via Dexie (offline play, sync queue)                             |
 
 ### Backend (`apps/api`)
 
-| Concern         | Choice                                   |
-| --------------- | ---------------------------------------- |
-| Runtime         | Node.js (LTS)                            |
-| Framework       | Fastify                                  |
-| Database        | PostgreSQL                               |
-| ORM / migrations| Drizzle ORM + drizzle-kit                |
-| Auth            | Better Auth (guest → full account)       |
-| Validation      | Zod (schemas from `packages/shared`)     |
+| Concern          | Choice                               |
+| ---------------- | ------------------------------------ |
+| Runtime          | Node.js (LTS)                        |
+| Framework        | Fastify                              |
+| Database         | PostgreSQL                           |
+| ORM / migrations | Drizzle ORM + drizzle-kit            |
+| Auth             | Better Auth (guest → full account)   |
+| Validation       | Zod (schemas from `packages/shared`) |
 
 ### Back office (`apps/admin`)
 
-| Concern | Choice                          |
-| ------- | ------------------------------- |
-| Build   | Vite                            |
+| Concern | Choice                             |
+| ------- | ---------------------------------- |
+| Build   | Vite                               |
 | UI      | React + shadcn/ui + TanStack Query |
 
 ### Landing page (`apps/site`)
 
-| Concern | Choice                               |
-| ------- | ------------------------------------ |
+| Concern   | Choice                             |
+| --------- | ---------------------------------- |
 | Framework | Astro (static, zero JS by default) |
 
 ### Tooling
 
-| Concern         | Choice                    |
-| --------------- | ------------------------- |
-| Language        | TypeScript (strict)       |
-| Monorepo        | pnpm workspaces + Turborepo |
-| Tests           | Vitest                    |
-| Lint / format   | ESLint + Prettier         |
-| Local services  | Docker Compose (PostgreSQL) |
-| CI              | GitHub Actions            |
+| Concern        | Choice                      |
+| -------------- | --------------------------- |
+| Language       | TypeScript (strict)         |
+| Monorepo       | pnpm workspaces + Turborepo |
+| Tests          | Vitest                      |
+| Lint / format  | ESLint + Prettier           |
+| Local services | Docker Compose (PostgreSQL) |
+| CI             | GitHub Actions              |
 
 ### Data model (overview)
 
@@ -111,14 +111,16 @@ packages/
 
 ## Getting started
 
-> Not scaffolded yet.
+Requires Node.js 22 (see `.nvmrc`) and pnpm 10.
 
 ```bash
 pnpm install
-docker compose up -d   # PostgreSQL
-pnpm db:migrate
-pnpm dev               # game + api + admin
+pnpm dev               # game on http://localhost:5173
 ```
+
+Checks (same as CI): `pnpm format:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`.
+
+API, database and admin are not scaffolded yet.
 
 ## Roadmap
 
