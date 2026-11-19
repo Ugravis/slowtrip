@@ -31,8 +31,8 @@ export class Physics {
    * `beforeStep` runs before each fixed step (controllers, forces).
    * Returns the interpolation alpha in [0, 1) between the last two steps.
    */
-  update(dt: number, beforeStep: (stepDt: number) => void): number {
-    this.accumulator = Math.min(this.accumulator + dt, PHYSICS_DT * MAX_SUBSTEPS)
+  update(dt: number, beforeStep: (stepDt: number) => void, maxSubsteps = MAX_SUBSTEPS): number {
+    this.accumulator = Math.min(this.accumulator + dt, PHYSICS_DT * maxSubsteps)
     while (this.accumulator >= PHYSICS_DT) {
       beforeStep(PHYSICS_DT)
       this.world.step()

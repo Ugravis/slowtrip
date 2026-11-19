@@ -4,6 +4,7 @@ import type * as THREE from 'three'
 import type { QualitySettings } from '../core/quality'
 import { parseSeed } from '../core/rng'
 import { Game } from '../game/Game'
+import { useGameStore } from '../game/store'
 import { loadRapier } from '../physics/physics'
 import { CHUNK_SIZE, DEFAULT_SEED } from '../world/constants'
 
@@ -12,6 +13,7 @@ const SKY = '#a8c8e0'
 export function Scene({ quality }: { quality: QualitySettings }) {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera
   const [game, setGame] = useState<Game | null>(null)
+  const publish = useGameStore((s) => s.setGame)
 
   useEffect(() => {
     let alive = true
@@ -21,12 +23,15 @@ export function Scene({ quality }: { quality: QualitySettings }) {
       if (!alive) return
       created = new Game(rapier, seed, quality, camera)
       setGame(created)
+      publish(created)
+      if (import.meta.env.DEV) Object.assign(window, { slowtrip: created })
     })
     return () => {
       alive = false
+      publish(null)
       created?.dispose()
     }
-  }, [camera, quality])
+  }, [camera, quality, publish])
 
   useFrame((_, dt) => game?.update(Math.min(dt, 0.1)))
 
@@ -38,6 +43,7 @@ export function Scene({ quality }: { quality: QualitySettings }) {
       <hemisphereLight args={['#dfefff', '#5a6b3a', 0.9]} />
       <directionalLight position={[60, 100, 30]} intensity={1.4} />
       {game && <primitive object={game.terrain.group} />}
+      {game && <primitive object={game.vehicles.group} />}
     </>
   )
 }

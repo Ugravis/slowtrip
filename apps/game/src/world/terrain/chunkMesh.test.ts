@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { hash2, mulberry32 } from '../../core/rng'
 import { buildChunkMesh, sampleChunkHeights } from './chunkMesh'
 import { createHeightSampler } from './heightSampler'
+import { findFlatSpot } from './spawn'
 
 describe('rng', () => {
   it('is deterministic', () => {
@@ -51,5 +52,14 @@ describe('terrain generation', () => {
       expect(h).toBeGreaterThan(-60)
       expect(h).toBeLessThan(90)
     }
+  })
+})
+
+describe('spawn', () => {
+  it('finds a deterministic, reasonably flat spot', () => {
+    const sample = createHeightSampler(1337)
+    const a = findFlatSpot(sample)
+    expect(findFlatSpot(createHeightSampler(1337))).toEqual(a)
+    expect(Math.abs(sample(a.x + 4, a.z) - sample(a.x - 4, a.z))).toBeLessThan(2)
   })
 })
