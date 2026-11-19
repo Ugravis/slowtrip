@@ -3,11 +3,13 @@ import { CameraRig } from '../camera/CameraRig'
 import { Character, type WalkControls } from '../character/Character'
 import { Input } from '../core/input'
 import type { QualitySettings } from '../core/quality'
+import { useSettings } from '../core/settings'
 import { Physics, type Rapier } from '../physics/physics'
 import type { DriveControls, Vehicle } from '../vehicles/Vehicle'
 import { OFFROAD, VAN } from '../vehicles/vehicleSpecs'
 import { VehicleSystem } from '../vehicles/VehicleSystem'
 import { WorldOrigin } from '../world/origin'
+import { createSkyState, DayNight } from '../world/sky/dayNight'
 import { createHeightSampler, type HeightSampler } from '../world/terrain/heightSampler'
 import { findFlatSpot } from '../world/terrain/spawn'
 import { TerrainSystem } from '../world/terrain/TerrainSystem'
@@ -18,9 +20,27 @@ const ENTER_MARGIN = 1.6
 /** Max speed (m/s) to get out of a vehicle. */
 const EXIT_MAX_SPEED = 3
 const MOUSE_SENSITIVITY = 0.0022
+/** Sun elevation under which headlights switch on by themselves (and off above). */
+const DUSK_ELEVATION = 0.06
 
 const _v = new THREE.Vector3()
 const _q = new THREE.Quaternion()
+
+/** World-space player pose for the UI (minimap, HUD). Doubles, not local coordinates. */
+export interface PlayerPose {
+  x: number
+  y: number
+  z: number
+  /** Radians, forward = (-sin h, -cos h). */
+  heading: number
+}
+
+/** Counters polled by the HUD. */
+export interface GameStats {
+  frames: number
+  drawCalls: number
+  triangles: number
+}
 
 /** Owns every simulation system. Plain TS: React only mounts `scene` objects and calls `update`. */
 export class Game {
@@ -31,10 +51,19 @@ export class Game {
   readonly character: Character
   readonly input = new Input()
   readonly cameraRig: CameraRig
+  readonly quality: QualitySettings
   /** Main-thread copy of the height function (spawn, camera clamping). Same seed as the worker. */
   readonly height: HeightSampler
+  readonly dayNight = new DayNight(10)
+  readonly sky = createSkyState()
+  readonly stats: GameStats = { frames: 0, drawCalls: 0, triangles: 0 }
   /** Vehicle currently driven by the player; null when on foot. */
   driven: Vehicle | null = null
+  /** Headlights of the driven vehicle. Auto at dusk/dawn, `L` overrides until the next one. */
+  headlights = false
+  /** Handbrake of the driven vehicle, toggled (stays on until pressed again). */
+  handbrake = false
+  private dark = false
   /** Vehicle close enough to get in (on foot only). */
   private nearby: Vehicle | null = null
 
@@ -54,6 +83,7 @@ export class Game {
     quality: QualitySettings,
     camera: THREE.PerspectiveCamera,
   ) {
+    this.quality = quality
     this.physics = new Physics(rapier)
     this.height = createHeightSampler(seed)
     this.terrain = new TerrainSystem(seed, quality.viewRadius, this.physics, this.origin)
@@ -67,6 +97,20 @@ export class Game {
     this.character = new Character(this.physics, x, this.heightAtLocal(x, z + 8) + 0.5, z + 8)
     this.character.setActive(false)
     useGameStore.getState().setMode('onFoot')
+    this.dayNight.apply(this.sky)
+    this.dark = this.sky.sunElevation < DUSK_ELEVATION
+    this.setHeadlights(this.dark)
+  }
+
+  setHeadlights(on: boolean): void {
+    this.headlights = on
+    useGameStore.getState().setHeadlights(on)
+  }
+
+  setHandbrake(on: boolean): void {
+    this.handbrake = on
+    this.drive.handbrake = on
+    useGameStore.getState().setHandbrake(on)
   }
 
   /** Height of the terrain at a local position. */
@@ -90,12 +134,50 @@ export class Game {
     return this.nearby ? `E · Drive the ${this.nearby.spec.name}` : null
   }
 
+  /** Records the last frame's renderer counters (HUD). */
+  recordRender(drawCalls: number, triangles: number): void {
+    this.stats.drawCalls = drawCalls
+    this.stats.triangles = triangles
+  }
+
+  /** Writes the player's world pose into `out`. */
+  pose(out: PlayerPose): void {
+    const entity = this.driven && this.vehicles.entityOf(this.driven)
+    if (entity) {
+      const p = entity.mesh.position
+      out.x = p.x + this.origin.x
+      out.y = p.y
+      out.z = p.z + this.origin.z
+      _v.set(0, 0, -1).applyQuaternion(entity.mesh.quaternion)
+      out.heading = Math.atan2(-_v.x, -_v.z)
+      return
+    }
+    const t = this.character.body.translation()
+    out.x = t.x + this.origin.x
+    out.y = t.y
+    out.z = t.z + this.origin.z
+    out.heading = this.character.yaw
+  }
+
   update(dt: number): void {
     const input = this.input
     input.poll()
+    this.stats.frames++
+
+    const settings = useSettings.getState()
+    if (!settings.timePaused) this.dayNight.advance(dt, settings.dayLengthMin)
+    this.dayNight.apply(this.sky)
+    const dark = this.sky.sunElevation < DUSK_ELEVATION
+    if (dark !== this.dark) {
+      this.dark = dark
+      this.setHeadlights(dark)
+    }
+    this.cameraRig.baseFov = settings.fov
+    const lookX = input.look.x * settings.lookSensitivity
+    const lookY = input.look.y * settings.lookSensitivity * (settings.invertY ? -1 : 1)
 
     if (this.driven) this.updateDriving(this.driven)
-    else this.updateOnFoot()
+    else this.updateOnFoot(lookX, lookY)
 
     this.vehicles.updateEnabled()
     const c = this.character.body.translation()
@@ -106,6 +188,7 @@ export class Game {
 
     const alpha = this.physics.update(dt, this.prePhysics)
     this.vehicles.sync(alpha)
+    this.vehicles.setHeadlights(this.driven, this.headlights)
 
     const driven = this.driven
     const entity = driven && this.vehicles.entityOf(driven)
@@ -114,8 +197,8 @@ export class Game {
         entity.mesh,
         entity.vehicle.spec,
         entity.vehicle.speed,
-        input.look.x,
-        input.look.y,
+        lookX,
+        lookY,
         dt,
       )
     } else {
@@ -137,9 +220,9 @@ export class Game {
     input.endFrame()
   }
 
-  private updateOnFoot(): void {
+  private updateOnFoot(lookX: number, lookY: number): void {
     const input = this.input
-    this.character.look(-input.look.x * MOUSE_SENSITIVITY, -input.look.y * MOUSE_SENSITIVITY)
+    this.character.look(-lookX * MOUSE_SENSITIVITY, -lookY * MOUSE_SENSITIVITY)
     this.walk.x = input.move.x
     this.walk.y = input.move.y
     this.walk.sprint = input.sprint
@@ -153,7 +236,8 @@ export class Game {
     const input = this.input
     this.drive.throttle = input.move.y
     this.drive.steer = input.move.x
-    this.drive.handbrake = input.brake
+    if (input.consume('handbrake')) this.setHandbrake(!this.handbrake)
+    if (input.consume('headlights')) this.setHeadlights(!this.headlights)
     if (input.consume('reset')) {
       const t = vehicle.body.translation()
       vehicle.resetUpright(this.heightAtLocal(t.x, t.z))
@@ -184,6 +268,7 @@ export class Game {
     this.driven = vehicle
     this.nearby = null
     this.character.setActive(false)
+    this.setHandbrake(false)
     vehicle.body.wakeUp()
     useGameStore.getState().setMode('driving')
   }

@@ -52,6 +52,15 @@ describe.each(['van', 'offroad'] as const)('%s', (id) => {
     expect(upY).toBeGreaterThan(0.9)
   })
 
+  it('cannot drive away with the handbrake on', () => {
+    const { vehicle, run } = setup(id)
+    run(1, null)
+    run(3, { throttle: 1, steer: 0, handbrake: true })
+    expect(Math.abs(vehicle.speed)).toBeLessThan(0.5)
+    run(3, { throttle: -1, steer: 0, handbrake: true })
+    expect(Math.abs(vehicle.speed)).toBeLessThan(0.5)
+  })
+
   it('brakes to a stop then reverses', () => {
     const { vehicle, run } = setup(id)
     run(1, null)

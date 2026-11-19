@@ -5,6 +5,9 @@ export type Drivetrain = 'rwd' | 'awd'
  * Vehicle tuning. Local frame: +X right, +Y up, -Z forward (Three.js convention).
  * Distances in meters, masses in kg, forces in N.
  */
+/** Lamp on the right side (mirrored to the left): center x, y, z and width, height. */
+export type Lamp = readonly [x: number, y: number, z: number, w: number, h: number]
+
 export interface VehicleSpec {
   id: VehicleId
   name: string
@@ -40,6 +43,8 @@ export interface VehicleSpec {
   /** Third-person camera distance and height. */
   chaseDistance: number
   chaseHeight: number
+  /** Headlights (front face) and tail lights (rear face), chassis space. */
+  lamps: { head: Lamp; tail: Lamp }
 }
 
 export const VAN: VehicleSpec = {
@@ -70,6 +75,7 @@ export const VAN: VehicleSpec = {
   driverEye: [-0.45, 0.65, -1.15],
   chaseDistance: 9,
   chaseHeight: 3.2,
+  lamps: { head: [0.7, -0.2, -2.46, 0.26, 0.16], tail: [0.8, -0.1, 2.46, 0.16, 0.3] },
 }
 
 export const OFFROAD: VehicleSpec = {
@@ -100,6 +106,7 @@ export const OFFROAD: VehicleSpec = {
   driverEye: [-0.42, 0.62, -0.35],
   chaseDistance: 8,
   chaseHeight: 2.8,
+  lamps: { head: [0.62, -0.05, -2.16, 0.22, 0.22], tail: [0.8, -0.05, 2.16, 0.14, 0.24] },
 }
 
 export const VEHICLE_SPECS: Record<VehicleId, VehicleSpec> = { van: VAN, offroad: OFFROAD }

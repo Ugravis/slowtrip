@@ -10,9 +10,14 @@ interface GameUiState {
   mode: PlayerMode
   /** Vehicle camera view (on foot is always first person). */
   view: CameraView
+  /** Toggled states shown on touch buttons and in the HUD. Written on change only. */
+  handbrake: boolean
+  headlights: boolean
   setGame: (game: Game | null) => void
   setMode: (mode: PlayerMode) => void
   setView: (view: CameraView) => void
+  setHandbrake: (on: boolean) => void
+  setHeadlights: (on: boolean) => void
 }
 
 export const useGameStore = create<GameUiState>((set) => ({
@@ -22,4 +27,8 @@ export const useGameStore = create<GameUiState>((set) => ({
   view: 'third',
   setMode: (mode) => set({ mode }),
   setView: (view) => set({ view }),
+  handbrake: false,
+  headlights: false,
+  setHandbrake: (handbrake) => set({ handbrake }),
+  setHeadlights: (headlights) => set({ headlights }),
 }))

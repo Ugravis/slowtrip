@@ -1,4 +1,4 @@
-import type RAPIER from '@dimforge/rapier3d-compat'
+import type RAPIER from '@dimforge/rapier3d'
 
 export type Rapier = typeof RAPIER
 
@@ -7,12 +7,12 @@ const MAX_SUBSTEPS = 4
 
 let ready: Promise<Rapier> | null = null
 
-/** Loads the Rapier WASM module once, in its own lazy chunk. */
+/**
+ * Loads Rapier once, in its own lazy chunk. The non-compat build ships the WASM as a
+ * separate file (streamed and compiled by the browser) instead of inlined base64.
+ */
 export function loadRapier(): Promise<Rapier> {
-  ready ??= import('@dimforge/rapier3d-compat').then(async ({ default: rapier }) => {
-    await rapier.init()
-    return rapier
-  })
+  ready ??= import('@dimforge/rapier3d').then((mod) => mod.default)
   return ready
 }
 

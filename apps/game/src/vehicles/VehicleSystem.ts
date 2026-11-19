@@ -2,10 +2,13 @@ import * as THREE from 'three'
 import type { Physics } from '../physics/physics'
 import type { TerrainSystem } from '../world/terrain/TerrainSystem'
 import { Vehicle, type DriveControls } from './Vehicle'
-import { buildVehicleGeometry, buildWheelGeometry } from './vehicleGeometry'
+import { buildLampGlowGeometry, buildVehicleGeometry, buildWheelGeometry } from './vehicleGeometry'
 import type { VehicleSpec } from './vehicleSpecs'
 
 const MAX_VEHICLES = 4
+/** Headlight beam: candela-like intensity (physically based lights), reach in meters. */
+const BEAM_INTENSITY = 160
+const BEAM_DISTANCE = 110
 
 // Scratch objects (no allocations per frame).
 const _m = new THREE.Matrix4()
@@ -22,6 +25,8 @@ export interface VehicleEntity {
   vehicle: Vehicle
   /** Rendered with the interpolated pose; read it for cameras. */
   mesh: THREE.Mesh
+  /** Unlit lamp overlay, child of `mesh`, visible when the lights are on. */
+  glow: THREE.Mesh
   /** Pose before the last physics step (for interpolation). */
   prevPos: THREE.Vector3
   prevRot: THREE.Quaternion
@@ -34,6 +39,23 @@ export class VehicleSystem {
   private readonly material = new THREE.MeshLambertMaterial({ vertexColors: true })
   private readonly wheelGeometry = buildWheelGeometry()
   private readonly wheels: THREE.InstancedMesh
+  private readonly glowMaterial = new THREE.MeshBasicMaterial({
+    vertexColors: true,
+    toneMapped: false,
+  })
+  /**
+   * One shared beam, attached to the lit vehicle. Toggled with `visible`: the shader
+   * variant without it is used by day, so no per-fragment cost when off.
+   */
+  private readonly beam = new THREE.SpotLight(
+    '#fff1d6',
+    BEAM_INTENSITY,
+    BEAM_DISTANCE,
+    0.62,
+    0.55,
+    1,
+  )
+  private lit: VehicleEntity | null = null
 
   constructor(
     private readonly physics: Physics,
@@ -44,6 +66,27 @@ export class VehicleSystem {
     this.wheels.count = 0
     this.wheels.frustumCulled = false
     this.group.add(this.wheels)
+    this.beam.visible = false
+    this.beam.name = 'headlights'
+  }
+
+  /** Lights up `vehicle` (headlights and tail lights), or switches every light off. */
+  setHeadlights(vehicle: Vehicle | null, on: boolean): void {
+    const next = on && vehicle ? this.entityOf(vehicle) : null
+    if (next === this.lit) return
+    if (this.lit) {
+      this.lit.glow.visible = false
+      this.lit.mesh.remove(this.beam, this.beam.target)
+    }
+    this.lit = next
+    this.beam.visible = next !== null
+    if (!next) return
+    next.glow.visible = true
+    // Beam from the front face, aimed slightly down the road.
+    const [, y, z] = next.vehicle.spec.lamps.head
+    this.beam.position.set(0, y + 0.1, z - 0.1)
+    this.beam.target.position.set(0, y - 1.5, z - 25)
+    next.mesh.add(this.beam, this.beam.target)
   }
 
   add(spec: VehicleSpec, x: number, y: number, z: number, yaw: number): VehicleEntity {
@@ -54,9 +97,14 @@ export class VehicleSystem {
     mesh.matrixAutoUpdate = false
     mesh.name = spec.id
     this.group.add(mesh)
+    const glow = new THREE.Mesh(buildLampGlowGeometry(spec), this.glowMaterial)
+    glow.visible = false
+    glow.matrixAutoUpdate = false
+    mesh.add(glow)
     const entity: VehicleEntity = {
       vehicle,
       mesh,
+      glow,
       prevPos: new THREE.Vector3(x, y, z),
       prevRot: new THREE.Quaternion(0, Math.sin(yaw / 2), 0, Math.cos(yaw / 2)),
     }
@@ -135,10 +183,13 @@ export class VehicleSystem {
   }
 
   dispose(): void {
-    for (const { vehicle, mesh } of this.entities) {
+    for (const { vehicle, mesh, glow } of this.entities) {
       vehicle.dispose()
       mesh.geometry.dispose()
+      glow.geometry.dispose()
     }
+    this.beam.dispose()
+    this.glowMaterial.dispose()
     this.entities.length = 0
     this.wheelGeometry.dispose()
     this.wheels.dispose()

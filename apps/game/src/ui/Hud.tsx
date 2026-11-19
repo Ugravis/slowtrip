@@ -1,23 +1,27 @@
+import { SettingsIcon } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { useGameStore } from '../game/store'
+import { ControlsPanel } from './ControlsPanel'
+import { FullMap } from './minimap/FullMap'
+import { Minimap } from './minimap/Minimap'
+import { isTouch, usePanel } from './panels'
+import { SettingsPanel } from './SettingsPanel'
+import { StatsPanel } from './StatsPanel'
 import { TouchControls } from './TouchControls'
-
-const DRIVE_HELP = 'WASD / ZQSD drive · Space handbrake · C view · Mouse look · R reset · E get out'
-const WALK_HELP = 'Click to look · WASD / ZQSD move · Shift run · Space jump · E drive'
-
-const isTouch = () => window.matchMedia('(pointer: coarse)').matches
 
 export function Hud() {
   const game = useGameStore((s) => s.game)
   const mode = useGameStore((s) => s.mode)
-  const speed = useRef<HTMLSpanElement>(null)
   const hint = useRef<HTMLDivElement>(null)
+  const touch = isTouch()
+  const [settingsOpen, toggleSettings] = usePanel('o', false)
+  /** M toggles the full map; the minimap is always shown. */
+  const [mapFull, toggleMapFull] = usePanel('m', false)
 
   // Polls the simulation at 10 Hz and writes the DOM directly: no per-frame React renders.
   useEffect(() => {
     if (!game) return
     const id = window.setInterval(() => {
-      if (speed.current) speed.current.textContent = `${Math.round(game.speedKmh)} km/h`
       if (hint.current) {
         const text = game.hint ?? ''
         if (hint.current.textContent !== text) hint.current.textContent = text
@@ -29,21 +33,28 @@ export function Hud() {
   if (!game) return <div className="hud-loading">Loading…</div>
 
   return (
-    <div className="hud">
-      {mode === 'driving' ? (
-        <div className="hud-speed">
-          <span ref={speed}>0 km/h</span>
-        </div>
-      ) : (
-        <div className="crosshair" />
-      )}
+    <div className={touch ? 'hud touch' : 'hud'}>
+      {mode !== 'driving' && <div className="crosshair" />}
       <div ref={hint} className="hud-hint" />
-      <div className="hud-seed">seed {game.seed}</div>
-      {isTouch() ? (
-        <TouchControls input={game.input} mode={mode} />
-      ) : (
-        <div className="hud-help">{mode === 'driving' ? DRIVE_HELP : WALK_HELP}</div>
-      )}
+      <StatsPanel game={game} />
+      {touch && <TouchControls input={game.input} mode={mode} />}
+      <ControlsPanel mode={mode} touch={touch} />
+      <div className="corner corner-br">
+        {settingsOpen && <SettingsPanel game={game} />}
+        <Minimap game={game} onExpand={toggleMapFull} />
+        <div className="corner-buttons">
+          <button
+            className={settingsOpen ? 'hud-btn icon active' : 'hud-btn icon'}
+            onClick={toggleSettings}
+            aria-expanded={settingsOpen}
+            aria-label="Settings"
+            title="Settings (O)"
+          >
+            <SettingsIcon size={18} />
+          </button>
+        </div>
+      </div>
+      {mapFull && <FullMap game={game} onClose={toggleMapFull} />}
     </div>
   )
 }

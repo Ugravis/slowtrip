@@ -1,6 +1,29 @@
+import {
+  ArrowBigUpIcon,
+  CircleParkingIcon,
+  FlashlightIcon,
+  FootprintsIcon,
+  HandIcon,
+  RotateCcwIcon,
+  SwitchCameraIcon,
+  type LucideIcon,
+} from 'lucide-react'
 import { useRef, type PointerEvent as ReactPointerEvent } from 'react'
 import type { Input, InputAction } from '../core/input'
-import type { PlayerMode } from '../game/store'
+import { useGameStore, type PlayerMode } from '../game/store'
+
+/** Icons of the touch buttons (also shown in the controls panel). */
+export const TOUCH_ICONS = {
+  handbrake: CircleParkingIcon,
+  headlights: FlashlightIcon,
+  reset: RotateCcwIcon,
+  toggleView: SwitchCameraIcon,
+  interact: HandIcon,
+  sprint: FootprintsIcon,
+  jump: ArrowBigUpIcon,
+} satisfies Record<string, LucideIcon>
+
+const ICON_SIZE = 26
 
 const STICK_RADIUS = 50
 const LOOK_SCALE = 2.2
@@ -54,34 +77,44 @@ export function ActionButton({
   input,
   action,
   label,
+  icon: Icon,
+  active = false,
 }: {
   input: Input
   action: InputAction
   label: string
+  icon: LucideIcon
+  /** Highlighted (toggle actions that are on). */
+  active?: boolean
 }) {
   return (
     <button
-      className="touch-btn"
+      className={active ? 'touch-btn active' : 'touch-btn'}
+      aria-label={label}
+      aria-pressed={active}
       onPointerDown={(e) => {
         e.stopPropagation()
         input.trigger(action)
       }}
     >
-      {label}
+      <Icon size={ICON_SIZE} />
     </button>
   )
 }
 
 export function HoldButton({
   label,
+  icon: Icon,
   onChange,
 }: {
   label: string
+  icon: LucideIcon
   onChange: (held: boolean) => void
 }) {
   return (
     <button
       className="touch-btn"
+      aria-label={label}
       onPointerDown={(e) => {
         e.stopPropagation()
         onChange(true)
@@ -90,7 +123,7 @@ export function HoldButton({
       onPointerCancel={() => onChange(false)}
       onPointerLeave={() => onChange(false)}
     >
-      {label}
+      <Icon size={ICON_SIZE} />
     </button>
   )
 }
@@ -119,6 +152,9 @@ function LookZone({ input }: { input: Input }) {
 }
 
 export function TouchControls({ input, mode }: { input: Input; mode: PlayerMode }) {
+  const handbrake = useGameStore((s) => s.handbrake)
+  const headlights = useGameStore((s) => s.headlights)
+  const I = TOUCH_ICONS
   return (
     <div className="touch-layer">
       <LookZone input={input} />
@@ -126,17 +162,34 @@ export function TouchControls({ input, mode }: { input: Input; mode: PlayerMode 
       <div className="touch-buttons">
         {mode === 'driving' ? (
           <>
-            <HoldButton label="Brake" onChange={(held) => input.setTouchBrake(held)} />
-            <ActionButton input={input} action="reset" label="Reset" />
-            <ActionButton input={input} action="toggleView" label="View" />
+            <ActionButton
+              input={input}
+              action="handbrake"
+              label="Handbrake"
+              icon={I.handbrake}
+              active={handbrake}
+            />
+            <ActionButton
+              input={input}
+              action="headlights"
+              label="Headlights"
+              icon={I.headlights}
+              active={headlights}
+            />
+            <ActionButton input={input} action="reset" label="Reset" icon={I.reset} />
+            <ActionButton input={input} action="toggleView" label="View" icon={I.toggleView} />
           </>
         ) : (
           <>
-            <HoldButton label="Run" onChange={(held) => input.setTouchSprint(held)} />
-            <ActionButton input={input} action="jump" label="Jump" />
+            <HoldButton
+              label="Run"
+              icon={I.sprint}
+              onChange={(held) => input.setTouchSprint(held)}
+            />
+            <ActionButton input={input} action="jump" label="Jump" icon={I.jump} />
           </>
         )}
-        <ActionButton input={input} action="interact" label="Use" />
+        <ActionButton input={input} action="interact" label="Use" icon={I.interact} />
       </div>
     </div>
   )

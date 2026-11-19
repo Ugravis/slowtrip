@@ -1,4 +1,4 @@
-import type RAPIER from '@dimforge/rapier3d-compat'
+import type RAPIER from '@dimforge/rapier3d'
 import { wrap, type Remote } from 'comlink'
 import * as THREE from 'three'
 import type { Physics } from '../../physics/physics'
@@ -33,8 +33,26 @@ const chunkKey = (cx: number, cz: number) => `${cx},${cz}`
  * Streams terrain chunks around the player: meshes with LOD rings (generated in a worker)
  * and heightfield colliders only for the nearest ring.
  */
+const PACK_OFFSET = 2 ** 20
+const PACK_SPAN = 2 ** 21
+
+/** Packs chunk coordinates (±1M chunks) into one exact number key. */
+export function packChunk(cx: number, cz: number): number {
+  return (cx + PACK_OFFSET) * PACK_SPAN + (cz + PACK_OFFSET)
+}
+
+export function unpackChunkX(key: number): number {
+  return Math.floor(key / PACK_SPAN) - PACK_OFFSET
+}
+
+export function unpackChunkZ(key: number): number {
+  return (key % PACK_SPAN) - PACK_OFFSET
+}
+
 export class TerrainSystem {
   readonly group = new THREE.Group()
+  /** Chunks the player has been close enough to load (packed keys). Session only, grows slowly. */
+  readonly explored = new Set<number>()
   private readonly material = new THREE.MeshLambertMaterial({ vertexColors: true })
   private readonly chunks = new Map<string, Chunk>()
   private readonly worker: Worker
@@ -70,6 +88,11 @@ export class TerrainSystem {
     this.pump()
   }
 
+  /** Loaded chunk count (HUD). */
+  get loadedChunks(): number {
+    return this.chunks.size
+  }
+
   /** True when the chunk containing this local position has a physics collider. */
   hasColliderAt(localX: number, localZ: number): boolean {
     const cx = Math.floor((localX + this.origin.x) / CHUNK_SIZE)
@@ -100,6 +123,7 @@ export class TerrainSystem {
         const cz = this.centerZ + dz
         const key = chunkKey(cx, cz)
         if (this.chunks.has(key)) continue
+        this.explored.add(packChunk(cx, cz))
         this.chunks.set(key, {
           key,
           cx,
