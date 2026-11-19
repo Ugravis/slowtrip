@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(notes.md)",
+      "Read(notes/**)"
+    ]
+  },
+  "model": "sonnet"
+}

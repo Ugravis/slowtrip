@@ -1,0 +1,20 @@
+notes.md
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+.astro/
+coverage/
+.turbo/
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Local tooling
+.claude/settings.local.json
+.DS_Store
+*.log
