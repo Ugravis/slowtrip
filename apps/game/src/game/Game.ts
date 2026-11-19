@@ -10,9 +10,18 @@ import { OFFROAD, VAN } from '../vehicles/vehicleSpecs'
 import { VehicleSystem } from '../vehicles/VehicleSystem'
 import { WorldOrigin } from '../world/origin'
 import { createSkyState, DayNight } from '../world/sky/dayNight'
-import { createHeightSampler, type HeightSampler } from '../world/terrain/heightSampler'
+import { BIOME_NAMES } from '../world/terrain/biomes'
+import {
+  createTerrainPoint,
+  createWorldGen,
+  type HeightSampler,
+  type WorldGen,
+} from '../world/terrain/heightSampler'
+import { MapTileSource } from '../world/terrain/mapTiles'
 import { findFlatSpot } from '../world/terrain/spawn'
 import { TerrainSystem } from '../world/terrain/TerrainSystem'
+import { Water } from '../world/water/Water'
+import { CHUNK_SIZE } from '../world/constants'
 import { useGameStore } from './store'
 
 /** Max distance (m) from a vehicle's side to get in. */
@@ -25,6 +34,7 @@ const DUSK_ELEVATION = 0.06
 
 const _v = new THREE.Vector3()
 const _q = new THREE.Quaternion()
+const _pt = createTerrainPoint()
 
 /** World-space player pose for the UI (minimap, HUD). Doubles, not local coordinates. */
 export interface PlayerPose {
@@ -52,8 +62,12 @@ export class Game {
   readonly input = new Input()
   readonly cameraRig: CameraRig
   readonly quality: QualitySettings
-  /** Main-thread copy of the height function (spawn, camera clamping). Same seed as the worker. */
+  /** Main-thread copy of the world generator (spawn, camera clamping, HUD). Same seed as the workers. */
+  readonly world: WorldGen
   readonly height: HeightSampler
+  readonly water: Water
+  /** Map tiles, generated on their own worker. */
+  readonly mapTiles: MapTileSource
   readonly dayNight = new DayNight(10)
   readonly sky = createSkyState()
   readonly stats: GameStats = { frames: 0, drawCalls: 0, triangles: 0 }
@@ -85,7 +99,10 @@ export class Game {
   ) {
     this.quality = quality
     this.physics = new Physics(rapier)
-    this.height = createHeightSampler(seed)
+    this.world = createWorldGen(seed)
+    this.height = this.world.height
+    this.water = new Water(quality.viewRadius * CHUNK_SIZE * 2.4)
+    this.mapTiles = new MapTileSource(seed)
     this.terrain = new TerrainSystem(seed, quality.viewRadius, this.physics, this.origin)
     this.vehicles = new VehicleSystem(this.physics, this.terrain)
     this.cameraRig = new CameraRig(camera, (x, z) => this.heightAtLocal(x, z))
@@ -116,6 +133,21 @@ export class Game {
   /** Height of the terrain at a local position. */
   heightAtLocal(lx: number, lz: number): number {
     return this.height(lx + this.origin.x, lz + this.origin.z)
+  }
+
+  /** Biome name at a world position (HUD). */
+  biomeAt(x: number, z: number): string {
+    return BIOME_NAMES[this.world.sample(x, z, _pt).biome] ?? ''
+  }
+
+  /** Dev: marks every chunk within `radius` chunks of the player as explored (full map audit). */
+  revealAround(radius: number): void {
+    const t = this.driven ? this.driven.body.translation() : this.character.body.translation()
+    this.terrain.reveal(
+      Math.floor((t.x + this.origin.x) / CHUNK_SIZE),
+      Math.floor((t.z + this.origin.z) / CHUNK_SIZE),
+      radius,
+    )
   }
 
   /** Speed of the driven vehicle in km/h (0 on foot). */
@@ -216,6 +248,7 @@ export class Game {
       this.vehicles.resetInterpolation()
       this.character.resetInterpolation()
     }
+    this.water.follow(focus.x - (shift?.dx ?? 0), focus.z - (shift?.dz ?? 0))
 
     input.endFrame()
   }
@@ -296,6 +329,8 @@ export class Game {
     this.character.dispose()
     this.vehicles.dispose()
     this.terrain.dispose()
+    this.water.dispose()
+    this.mapTiles.dispose()
     this.physics.dispose()
   }
 }

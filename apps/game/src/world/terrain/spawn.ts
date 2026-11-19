@@ -1,8 +1,9 @@
+import { WATER_LEVEL } from '../constants'
 import type { HeightSampler } from './heightSampler'
 
 /**
  * Finds the flattest spot near (0, 0) for spawning vehicles, scanning a grid deterministically.
- * Flatness = height range over a footprint of `radius` meters.
+ * Flatness = height range over a footprint of `radius` meters. Lake beds and shores are skipped.
  */
 export function findFlatSpot(
   sample: HeightSampler,
@@ -23,6 +24,7 @@ export function findFlatSpot(
           if (h > hi) hi = h
         }
       }
+      if (lo < WATER_LEVEL + 0.5) continue
       // Prefer flat ground, then proximity to the origin.
       const score = hi - lo + Math.hypot(x, z) * 0.002
       if (score < bestScore) {

@@ -100,6 +100,15 @@ export class TerrainSystem {
     return this.chunks.get(chunkKey(cx, cz))?.body != null
   }
 
+  /** Marks chunks within `radius` of (cx, cz) as explored, without loading them (map only). */
+  reveal(cx: number, cz: number, radius: number): void {
+    for (let dx = -radius; dx <= radius; dx++) {
+      for (let dz = -radius; dz <= radius; dz++) {
+        if (dx * dx + dz * dz <= radius * radius) this.explored.add(packChunk(cx + dx, cz + dz))
+      }
+    }
+  }
+
   /** Repositions meshes after the floating origin moved. Physics bodies are shifted by Physics. */
   onOriginShift(): void {
     for (const chunk of this.chunks.values()) {

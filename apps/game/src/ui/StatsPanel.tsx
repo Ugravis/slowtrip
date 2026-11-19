@@ -40,6 +40,7 @@ export function StatsPanel({ game }: { game: Game }) {
           : `${game.stats.drawCalls} calls · ${formatCount(game.stats.triangles)} tris`,
         `${formatTime(game.dayNight.time)} · ${game.quality.tier} quality`,
         `x ${Math.round(pose.x)} z ${Math.round(pose.z)} · alt ${Math.round(pose.y)} m`,
+        `biome ${game.biomeAt(pose.x, pose.z)}`,
         `chunk ${Math.floor(pose.x / CHUNK_SIZE)},${Math.floor(pose.z / CHUNK_SIZE)} · ${game.terrain.loadedChunks} loaded · ${Math.round(deg)}°`,
         `seed ${game.seed}`,
       ]

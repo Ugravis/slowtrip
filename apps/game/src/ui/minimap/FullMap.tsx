@@ -1,11 +1,19 @@
-import { LocateFixedIcon, MinusIcon, PlusIcon, XIcon } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { LayersIcon, LocateFixedIcon, MinusIcon, PlusIcon, RadarIcon, XIcon } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import type { Game } from '../../game/Game'
+import { BIOME_NAMES, BIOME_SRGB, WATER_SRGB, type Rgb } from '../../world/terrain/biomes'
+import type { MapLayer } from '../../world/terrain/mapTile'
 import { clampZoom, useMapCanvas } from './Minimap'
 
 /** Full map can zoom out further than the minimap: tiles only exist where the player went. */
 const FULL_ZOOM_MAX = 24
 const FULL_ZOOM_DEFAULT = 4
+/** Dev reveal radius, in chunks (~2 km). */
+const REVEAL_RADIUS = 32
+/** Zoom (m/px) after a reveal, to see the whole revealed area. */
+const REVEAL_ZOOM = 8
+
+const css = ([r, g, b]: Rgb) => `rgb(${r * 255} ${g * 255} ${b * 255})`
 
 /**
  * Fullscreen map, north-up. Drag to pan, wheel or pinch to zoom.
@@ -18,6 +26,7 @@ export function FullMap({ game, onClose }: { game: Game; onClose: () => void }) 
   const pointers = useRef(new Map<number, { x: number; y: number }>())
   const pinch = useRef(0)
   const pending = useRef(false)
+  const [layer, setLayer] = useState<MapLayer>('terrain')
 
   const redraw = useMapCanvas(canvas, game, (view) => {
     view.centerX += pan.current.x
@@ -25,6 +34,8 @@ export function FullMap({ game, onClose }: { game: Game; onClose: () => void }) 
     view.zoom = zoom.current
     view.rotate = false
     view.northMarker = false
+    view.layer = layer
+    view.labels = true
   })
 
   /** Redraws on the next animation frame (coalesces pointer events). */
@@ -41,6 +52,8 @@ export function FullMap({ game, onClose }: { game: Game; onClose: () => void }) 
     zoom.current = clampZoom(zoom.current * f, FULL_ZOOM_MAX)
     schedule()
   }
+
+  useEffect(() => redraw.current(), [layer, redraw])
 
   useEffect(() => {
     if (document.pointerLockElement) document.exitPointerLock()
@@ -120,9 +133,49 @@ export function FullMap({ game, onClose }: { game: Game; onClose: () => void }) 
         >
           <LocateFixedIcon size={18} />
         </button>
+        <button
+          className={layer === 'biomes' ? 'hud-btn icon active' : 'hud-btn icon'}
+          onClick={() => setLayer(layer === 'biomes' ? 'terrain' : 'biomes')}
+          aria-pressed={layer === 'biomes'}
+          aria-label="Biome layer"
+          title="Biome layer"
+        >
+          <LayersIcon size={18} />
+        </button>
+        {import.meta.env.DEV && (
+          <button
+            className="hud-btn icon"
+            onClick={() => {
+              game.revealAround(REVEAL_RADIUS)
+              pan.current.x = 0
+              pan.current.z = 0
+              zoom.current = clampZoom(Math.max(zoom.current, REVEAL_ZOOM), FULL_ZOOM_MAX)
+              schedule()
+            }}
+            aria-label="Reveal area (dev)"
+            title={`Dev: reveal ${REVEAL_RADIUS} chunks around the player`}
+          >
+            <RadarIcon size={18} />
+          </button>
+        )}
       </div>
       <div className="map-full-legend">
-        Explored area only · drag to pan · wheel or pinch to zoom
+        {layer === 'biomes' ? (
+          <>
+            {BIOME_NAMES.map((name, i) => (
+              <span key={name} className="map-legend-item">
+                <i style={{ background: css(BIOME_SRGB[i] as Rgb) }} />
+                {name}
+              </span>
+            ))}
+            <span className="map-legend-item">
+              <i style={{ background: css(WATER_SRGB) }} />
+              Water
+            </span>
+          </>
+        ) : (
+          '▲ peak · )( pass · explored area only · drag to pan · wheel or pinch to zoom'
+        )}
       </div>
     </div>
   )
