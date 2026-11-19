@@ -1,13 +1,15 @@
 /** Edge-triggered actions: read once with `consume`. */
-export type InputAction = 'interact' | 'toggleView' | 'reset' | 'jump'
+export type InputAction = 'interact' | 'toggleView' | 'reset' | 'jump' | 'handbrake' | 'headlights'
 
-const KEY_ACTIONS: Record<string, InputAction> = {
-  KeyE: 'interact',
-  KeyF: 'interact',
-  KeyC: 'toggleView',
-  KeyV: 'toggleView',
-  KeyR: 'reset',
-  Space: 'jump',
+/** A key may fire several actions; the active mode consumes the one it needs. */
+const KEY_ACTIONS: Record<string, readonly InputAction[]> = {
+  KeyE: ['interact'],
+  KeyF: ['interact'],
+  KeyC: ['toggleView'],
+  KeyV: ['toggleView'],
+  KeyR: ['reset'],
+  KeyL: ['headlights'],
+  Space: ['jump', 'handbrake'],
 }
 
 /**
@@ -21,12 +23,10 @@ export class Input {
   readonly look = { x: 0, y: 0 }
   /** Held buttons. */
   sprint = false
-  brake = false
   /** Analog stick from the touch UI, merged with the keyboard axes. */
   readonly stick = { x: 0, y: 0 }
 
   private touchSprint = false
-  private touchBrake = false
   private readonly keys = new Set<string>()
   private readonly pending = new Set<InputAction>()
 
@@ -34,8 +34,8 @@ export class Input {
     if (e.repeat) return
     const code = keyCode(e)
     this.keys.add(code)
-    const action = KEY_ACTIONS[code]
-    if (action) this.pending.add(action)
+    const actions = KEY_ACTIONS[code]
+    if (actions) for (const a of actions) this.pending.add(a)
     if (code === 'Space' || code.startsWith('Arrow')) e.preventDefault()
   }
 
@@ -87,16 +87,11 @@ export class Input {
     this.move.x = clamp1(kx + this.stick.x)
     this.move.y = clamp1(ky + this.stick.y)
     this.sprint = k.has('ShiftLeft') || k.has('ShiftRight') || this.touchSprint
-    this.brake = k.has('Space') || this.touchBrake
   }
 
   setStick(x: number, y: number): void {
     this.stick.x = x
     this.stick.y = y
-  }
-
-  setTouchBrake(held: boolean): void {
-    this.touchBrake = held
   }
 
   setTouchSprint(held: boolean): void {

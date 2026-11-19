@@ -1,4 +1,4 @@
-import type RAPIER from '@dimforge/rapier3d-compat'
+import type RAPIER from '@dimforge/rapier3d'
 import type { Physics } from '../physics/physics'
 import type { VehicleSpec } from './vehicleSpecs'
 
@@ -117,7 +117,12 @@ export class Vehicle {
         if (v > 0.5) brake = s.brakeForce * -t
         else if (v > -s.maxReverseSpeed) engine = s.engineForce * 0.6 * t
       }
-      if (controls.handbrake) rearBrake = s.brakeForce
+      if (controls.handbrake) {
+        // Parking brake: no drive, rear wheels locked, and held still once stopped.
+        engine = 0
+        rearBrake = s.brakeForce
+        if (Math.abs(v) < 1) brake = s.brakeForce
+      }
       // Less steering at speed for stability.
       const speedFactor = 1 - 0.65 * Math.min(1, Math.abs(v) / 28)
       targetSteer = -controls.steer * s.maxSteer * speedFactor

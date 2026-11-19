@@ -36,20 +36,32 @@ export function sampleChunkHeights(
 }
 
 // Flat low-poly palette, authored in sRGB and converted to linear (vertex colors are linear).
-const lin = (r: number, g: number, b: number) => [r ** 2.2, g ** 2.2, b ** 2.2] as const
-const SAND = lin(0.79, 0.72, 0.5)
-const GRASS = lin(0.42, 0.56, 0.27)
-const DRY = lin(0.6, 0.6, 0.32)
-const ROCK = lin(0.5, 0.47, 0.43)
-const SNOW = lin(0.93, 0.94, 0.96)
+type Rgb = readonly [number, number, number]
+export type TerrainBand = 'sand' | 'grass' | 'dry' | 'rock' | 'snow'
+/** sRGB palette in [0, 1], shared with the minimap. */
+export const TERRAIN_SRGB: Record<TerrainBand, Rgb> = {
+  sand: [0.79, 0.72, 0.5],
+  grass: [0.42, 0.56, 0.27],
+  dry: [0.6, 0.6, 0.32],
+  rock: [0.5, 0.47, 0.43],
+  snow: [0.93, 0.94, 0.96],
+}
+const lin = ([r, g, b]: Rgb): Rgb => [r ** 2.2, g ** 2.2, b ** 2.2]
+const TERRAIN_LINEAR = Object.fromEntries(
+  Object.entries(TERRAIN_SRGB).map(([k, v]) => [k, lin(v)]),
+) as Record<TerrainBand, Rgb>
+
+/** Terrain band from height (m) and normal y. */
+export function terrainBand(y: number, ny: number): TerrainBand {
+  if (ny < 0.8) return 'rock'
+  if (y > 46) return 'snow'
+  if (y < -18) return 'sand'
+  if (y > 22) return 'dry'
+  return 'grass'
+}
 
 function faceColor(out: Float32Array, offset: number, y: number, ny: number, jitter: number): void {
-  let c: readonly [number, number, number]
-  if (ny < 0.8) c = ROCK
-  else if (y > 46) c = SNOW
-  else if (y < -18) c = SAND
-  else if (y > 22) c = DRY
-  else c = GRASS
+  const c = TERRAIN_LINEAR[terrainBand(y, ny)]
   const k = 0.93 + jitter * 0.14
   for (let v = 0; v < 3; v++) {
     const o = offset + v * 3

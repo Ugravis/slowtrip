@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import type { VehicleId, VehicleSpec } from './vehicleSpecs'
+import type { Lamp, VehicleId, VehicleSpec } from './vehicleSpecs'
 
 type Rgb = readonly [number, number, number]
 
@@ -99,10 +99,7 @@ function vanParts(s: VehicleSpec): THREE.BufferGeometry[] {
     // Bumpers, lights, grille
     box(W + 0.06, 0.2, 0.18, 0, bottom + 0.3, -hz - 0.05, CHROME),
     box(W + 0.06, 0.2, 0.18, 0, bottom + 0.3, hz + 0.05, CHROME),
-    box(0.26, 0.16, 0.04, -hx + 0.25, bottom + 0.65, -hz - 0.01, LIGHT),
-    box(0.26, 0.16, 0.04, hx - 0.25, bottom + 0.65, -hz - 0.01, LIGHT),
-    box(0.16, 0.3, 0.04, -hx + 0.15, bottom + 0.75, hz + 0.01, TAIL),
-    box(0.16, 0.3, 0.04, hx - 0.15, bottom + 0.75, hz + 0.01, TAIL),
+    ...lampParts(s, 0, 1),
     box(0.9, 0.3, 0.04, 0, bottom + 0.6, -hz - 0.01, DARK),
   ]
 }
@@ -134,10 +131,7 @@ function offroadParts(s: VehicleSpec): THREE.BufferGeometry[] {
     box(W + 0.1, 0.25, 0.2, 0, bottom + 0.1, -hz - 0.08, DARK),
     box(W - 0.4, 0.06, 0.06, 0, bottom + 0.6, -hz - 0.12, DARK),
     box(W + 0.1, 0.25, 0.2, 0, bottom + 0.1, hz + 0.08, DARK),
-    box(0.22, 0.22, 0.04, -hx + 0.3, bottom + 0.55, -hz - 0.01, LIGHT),
-    box(0.22, 0.22, 0.04, hx - 0.3, bottom + 0.55, -hz - 0.01, LIGHT),
-    box(0.14, 0.24, 0.04, -hx + 0.12, bottom + 0.55, hz + 0.01, TAIL),
-    box(0.14, 0.24, 0.04, hx - 0.12, bottom + 0.55, hz + 0.01, TAIL),
+    ...lampParts(s, 0, 1),
     // Spare wheel
     box(0.7, 0.7, 0.25, 0, bottom + 0.75, hz + 0.18, DARK),
     // Wheel arches
@@ -146,6 +140,21 @@ function offroadParts(s: VehicleSpec): THREE.BufferGeometry[] {
       box(0.12, 0.2, 1.1, hx + 0.03, bottom + 0.62, z, DARK),
     ]),
   ]
+}
+
+/** Head and tail lamps, both sides. `out` pushes them outward (m), `glow` scales colors. */
+function lampParts(s: VehicleSpec, out: number, glow: number): THREE.BufferGeometry[] {
+  const lamp = ([x, y, z, w, h]: Lamp, color: Rgb, dir: number) => {
+    const c: Rgb = [color[0] * glow, color[1] * glow, color[2] * glow]
+    const zz = z + dir * out
+    return [box(w, h, 0.04, -x, y, zz, c), box(w, h, 0.04, x, y, zz, c)]
+  }
+  return [...lamp(s.lamps.head, LIGHT, -1), ...lamp(s.lamps.tail, TAIL, 1)]
+}
+
+/** Emissive overlay drawn over the lamps when the lights are on (unlit material). */
+export function buildLampGlowGeometry(spec: VehicleSpec): THREE.BufferGeometry {
+  return merge(lampParts(spec, 0.01, 1.6))
 }
 
 export function buildVehicleGeometry(spec: VehicleSpec): THREE.BufferGeometry {

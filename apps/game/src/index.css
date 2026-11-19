@@ -34,20 +34,6 @@ body,
   color: #fff;
 }
 
-.hud-speed {
-  position: absolute;
-  right: max(16px, env(safe-area-inset-right));
-  top: max(12px, env(safe-area-inset-top));
-  font-size: 20px;
-}
-
-.hud-help {
-  position: absolute;
-  left: 16px;
-  bottom: 12px;
-  opacity: 0.85;
-}
-
 .touch-layer {
   position: absolute;
   inset: 0;
@@ -86,6 +72,8 @@ body,
 }
 
 .touch-btn {
+  display: grid;
+  place-items: center;
   width: 64px;
   height: 64px;
   border-radius: 50%;
@@ -133,10 +121,274 @@ body,
   touch-action: none;
 }
 
-.hud-seed {
+.hud-stats {
   position: absolute;
-  left: max(16px, env(safe-area-inset-left));
-  top: max(12px, env(safe-area-inset-top));
-  font-size: 12px;
+  left: max(12px, env(safe-area-inset-left));
+  top: max(10px, env(safe-area-inset-top));
+  margin: 0;
+  padding: 6px 9px;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 28%);
+  font:
+    500 12px/1.45 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  white-space: pre;
+}
+
+.hud-stats::first-line {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.corner {
+  position: absolute;
+  z-index: 2;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.corner-bl {
+  left: max(12px, env(safe-area-inset-left));
+  align-items: flex-start;
+}
+
+.corner-br {
+  right: max(12px, env(safe-area-inset-right));
+  align-items: flex-end;
+}
+
+/* Touch: keep corners clear of the joystick and action buttons. */
+.hud.touch .corner {
+  bottom: calc(max(24px, env(safe-area-inset-bottom)) + 156px);
+}
+
+.corner-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.hud-btn {
+  pointer-events: auto;
+  touch-action: manipulation;
+  padding: 6px 12px;
+  border: 1px solid rgb(255 255 255 / 35%);
+  border-radius: 6px;
+  background: rgb(0 0 0 / 38%);
+  color: #fff;
+  font:
+    600 13px system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+
+.hud-btn.icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+}
+
+.hud-btn.active,
+.touch-btn.active {
+  background: rgb(255 179 71 / 85%);
+  border-color: #ffd9a0;
+  color: #1a1206;
+}
+
+.hud-btn:hover {
+  background: rgb(0 0 0 / 55%);
+}
+
+.hud-btn.wide {
+  width: 100%;
+  margin-top: 6px;
+}
+
+.panel {
+  pointer-events: auto;
+  max-height: min(60vh, 460px);
+  overflow-y: auto;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgb(14 20 28 / 72%);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  text-shadow: none;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.panel h2 {
+  margin: 8px 0 6px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.65;
+}
+
+.panel h2:first-child {
+  margin-top: 0;
+}
+
+.controls-list {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+}
+
+.controls-list div {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.controls-list dt {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.controls-list dd {
+  margin: 0;
+  opacity: 0.85;
+  text-align: right;
+}
+
+/* Settings open to the left of the map column. */
+.corner-br .settings {
+  position: absolute;
+  right: calc(100% + 8px);
+  bottom: 0;
+  width: 240px;
+}
+
+.hud.touch .corner-br .settings {
+  max-height: 55vh;
+}
+
+.field {
+  display: grid;
+  gap: 3px;
+  margin-bottom: 8px;
+}
+
+.field-row {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+
+.field-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.field-value {
   opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+
+.field input[type='range'],
+.field select {
+  width: 100%;
+  accent-color: #ffb347;
+}
+
+.field select {
+  padding: 3px;
+  border-radius: 4px;
+}
+
+.minimap {
+  position: relative;
+  pointer-events: auto;
+}
+
+.minimap-canvas {
+  display: block;
+  cursor: zoom-in;
+  width: 168px;
+  height: 168px;
+  border-radius: 50%;
+  border: 2px solid rgb(255 255 255 / 55%);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 35%);
+  touch-action: none;
+}
+
+.hud.touch .minimap-canvas {
+  width: 120px;
+  height: 120px;
+}
+
+.minimap-zoom {
+  position: absolute;
+  left: -10px;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hud.touch .hud-stats {
+  font-size: 10px;
+}
+
+.hud.touch .hud-stats::first-line {
+  font-size: 13px;
+}
+
+.minimap-zoom .hud-btn.icon {
+  width: 28px;
+  height: 28px;
+}
+
+.map-full {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  pointer-events: auto;
+  background: #1c2430;
+}
+
+.map-full-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+
+.map-full-canvas:active {
+  cursor: grabbing;
+}
+
+.map-full-tools {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.map-full-tools .hud-btn.icon {
+  width: 44px;
+  height: 44px;
+}
+
+.map-full-legend {
+  position: absolute;
+  left: 50%;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 40%);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
 }

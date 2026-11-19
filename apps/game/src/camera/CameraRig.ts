@@ -33,6 +33,8 @@ function wrapAngle(a: number): number {
  */
 export class CameraRig {
   view: CameraView = 'third'
+  /** Base vertical FOV in degrees (settings). Speed and first-person offsets add to it. */
+  baseFov = BASE_FOV
   private heading = Number.NaN
   private orbitYaw = 0
   private orbitPitch = 0
@@ -80,7 +82,7 @@ export class CameraRig {
 
     if (this.view === 'first') {
       this.lookYaw = clamp(this.lookYaw - lookX * LOOK_SENSITIVITY, -2.2, 2.2)
-      this.lookPitch = clamp(this.lookPitch - lookY * LOOK_SENSITIVITY, -1, 0.8)
+      this.lookPitch = clamp(this.lookPitch - lookY * LOOK_SENSITIVITY, -1.35, 0.8)
       this.lookYaw -= this.lookYaw * recenter
       this.lookPitch -= this.lookPitch * recenter
 
@@ -89,7 +91,7 @@ export class CameraRig {
       _euler.set(this.lookPitch, this.lookYaw, 0)
       _qLook.setFromEuler(_euler)
       this.camera.quaternion.copy(mesh.quaternion).multiply(_qLook)
-      this.setFov(BASE_FOV + 5, dt)
+      this.setFov(this.baseFov + 5, dt)
       return
     }
 
@@ -103,7 +105,8 @@ export class CameraRig {
     this.heading += wrapAngle(heading - this.heading) * damp(followRate, dt)
 
     this.orbitYaw = wrapAngle(this.orbitYaw - lookX * LOOK_SENSITIVITY)
-    this.orbitPitch = clamp(this.orbitPitch + lookY * LOOK_SENSITIVITY, -0.35, 1.1)
+    // Total pitch = base chase angle + orbit: from slightly below the roof line to near top-down.
+    this.orbitPitch = clamp(this.orbitPitch + lookY * LOOK_SENSITIVITY, -0.6, 1.2)
     this.orbitYaw -= this.orbitYaw * recenter
     this.orbitPitch -= this.orbitPitch * recenter
 
@@ -129,7 +132,7 @@ export class CameraRig {
 
     this.camera.position.copy(_desired)
     this.camera.lookAt(_target)
-    this.setFov(BASE_FOV + Math.min(1, Math.abs(speed) / 30) * SPEED_FOV, dt)
+    this.setFov(this.baseFov + Math.min(1, Math.abs(speed) / 30) * SPEED_FOV, dt)
   }
 
   /** First-person view from the character's eyes (the only on-foot view). */
@@ -138,7 +141,7 @@ export class CameraRig {
     this.camera.position.set(_pos.x, _pos.y + Character.EYE_OFFSET, _pos.z)
     _euler.set(character.pitch, character.yaw, 0)
     this.camera.quaternion.setFromEuler(_euler)
-    this.setFov(BASE_FOV + 5, dt)
+    this.setFov(this.baseFov + 5, dt)
   }
 
   /** Moves the camera with the floating origin. */
