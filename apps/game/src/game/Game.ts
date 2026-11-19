@@ -76,7 +76,8 @@ export class Game {
 
   /** Speed of the driven vehicle in km/h (0 on foot). */
   get speedKmh(): number {
-    return this.driven ? Math.abs(this.driven.speed) * 3.6 : 0
+    const kmh = this.driven ? Math.abs(this.driven.speed) * 3.6 : 0
+    return kmh < 1 ? 0 : kmh
   }
 
   /** Contextual action hint for the HUD, or null. */
@@ -103,11 +104,23 @@ export class Game {
       if (ground !== this.character.body.isEnabled()) this.character.setActive(ground)
     }
 
-    this.physics.update(dt, this.prePhysics)
-    this.vehicles.sync()
+    const alpha = this.physics.update(dt, this.prePhysics)
+    this.vehicles.sync(alpha)
 
-    if (this.driven) this.cameraRig.followVehicle(this.driven, dt)
-    else this.cameraRig.firstPersonCharacter(this.character)
+    const driven = this.driven
+    const entity = driven && this.vehicles.entityOf(driven)
+    if (entity) {
+      this.cameraRig.vehicle(
+        entity.mesh,
+        entity.vehicle.spec,
+        entity.vehicle.speed,
+        input.look.x,
+        input.look.y,
+        dt,
+      )
+    } else {
+      this.cameraRig.character(this.character, alpha, dt)
+    }
 
     const focus = this.driven ? this.driven.body.translation() : this.character.body.translation()
     this.terrain.update(focus.x, focus.z)
@@ -117,6 +130,8 @@ export class Game {
       this.physics.shift(shift.dx, shift.dz)
       this.terrain.onOriginShift()
       this.cameraRig.shift(shift.dx, shift.dz)
+      this.vehicles.resetInterpolation()
+      this.character.resetInterpolation()
     }
 
     input.endFrame()
@@ -142,8 +157,10 @@ export class Game {
     if (input.consume('reset')) {
       const t = vehicle.body.translation()
       vehicle.resetUpright(this.heightAtLocal(t.x, t.z))
+      this.vehicles.resetInterpolation()
     }
     if (input.consume('interact') && Math.abs(vehicle.speed) <= EXIT_MAX_SPEED) this.exit(vehicle)
+    if (input.consume('toggleView')) useGameStore.getState().setView(this.cameraRig.toggleView())
   }
 
   private findNearbyVehicle(): Vehicle | null {
@@ -163,6 +180,7 @@ export class Game {
   }
 
   private enter(vehicle: Vehicle): void {
+    this.cameraRig.reset()
     this.driven = vehicle
     this.nearby = null
     this.character.setActive(false)
@@ -171,6 +189,7 @@ export class Game {
   }
 
   private exit(vehicle: Vehicle): void {
+    this.cameraRig.reset()
     // Step out on the driver's side (left), next to the door.
     const spec = vehicle.spec
     const r = vehicle.body.rotation()

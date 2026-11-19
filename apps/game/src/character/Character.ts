@@ -37,6 +37,8 @@ export class Character {
   private readonly delta = { x: 0, y: 0, z: 0 }
   private readonly next = { x: 0, y: 0, z: 0 }
   private readonly moved = { x: 0, y: 0, z: 0 }
+  /** Capsule center before the last physics step (for interpolation). */
+  private readonly prev = { x: 0, y: 0, z: 0 }
 
   constructor(
     private readonly physics: Physics,
@@ -65,6 +67,7 @@ export class Character {
     c.setApplyImpulsesToDynamicBodies(true)
     c.setCharacterMass(80)
     this.controller = c
+    this.resetInterpolation()
   }
 
   /** Eye height above the capsule center. */
@@ -78,6 +81,10 @@ export class Character {
 
   /** Moves the capsule. Call before each physics step. */
   step(dt: number, controls: WalkControls): void {
+    const p = this.body.translation()
+    this.prev.x = p.x
+    this.prev.y = p.y
+    this.prev.z = p.z
     const speed = controls.sprint ? SPRINT_SPEED : WALK_SPEED
     const sin = Math.sin(this.yaw)
     const cos = Math.cos(this.yaw)
@@ -116,6 +123,22 @@ export class Character {
     this.body.setNextKinematicTranslation(this.next)
   }
 
+  /** Interpolated capsule center between the last two physics steps. */
+  renderPosition(alpha: number, out: { x: number; y: number; z: number }): void {
+    const t = this.body.translation()
+    out.x = this.prev.x + (t.x - this.prev.x) * alpha
+    out.y = this.prev.y + (t.y - this.prev.y) * alpha
+    out.z = this.prev.z + (t.z - this.prev.z) * alpha
+  }
+
+  /** Snaps interpolation to the current position. */
+  resetInterpolation(): void {
+    const t = this.body.translation()
+    this.prev.x = t.x
+    this.prev.y = t.y
+    this.prev.z = t.z
+  }
+
   /** Teleports the capsule so its feet stand at (x, feetY, z). */
   placeAt(x: number, feetY: number, z: number, yaw: number): void {
     this.body.setTranslation({ x, y: feetY + HALF_HEIGHT + RADIUS + 0.05, z }, true)
@@ -125,6 +148,9 @@ export class Character {
     this.vx = 0
     this.vy = 0
     this.vz = 0
+    this.prev.x = x
+    this.prev.y = feetY + HALF_HEIGHT + RADIUS + 0.05
+    this.prev.z = z
   }
 
   setActive(active: boolean): void {

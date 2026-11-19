@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useGameStore } from '../game/store'
 import { TouchControls } from './TouchControls'
 
-const DRIVE_HELP = 'WASD / ZQSD drive · Space handbrake · R reset · E get out'
+const DRIVE_HELP = 'WASD / ZQSD drive · Space handbrake · C view · Mouse look · R reset · E get out'
 const WALK_HELP = 'Click to look · WASD / ZQSD move · Shift run · Space jump · E drive'
 
 const isTouch = () => window.matchMedia('(pointer: coarse)').matches
@@ -38,6 +38,7 @@ export function Hud() {
         <div className="crosshair" />
       )}
       <div ref={hint} className="hud-hint" />
+      <div className="hud-seed">seed {game.seed}</div>
       {isTouch() ? (
         <TouchControls input={game.input} mode={mode} />
       ) : (

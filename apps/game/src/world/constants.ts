@@ -16,5 +16,3 @@ export const COLLIDER_RING = 1
 
 /** Recenter the world when the player is farther than this from the local origin (meters). */
 export const ORIGIN_REBASE_DISTANCE = 4 * CHUNK_SIZE
-
-export const DEFAULT_SEED = 1337

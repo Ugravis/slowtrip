@@ -9,6 +9,12 @@ const srgb = (hex: number): Rgb => {
   return [c.r, c.g, c.b]
 }
 
+const GLASS = srgb(0x27343d)
+const DARK = srgb(0x2b2b2b)
+const LIGHT = srgb(0xfff4c2)
+const TAIL = srgb(0xb3261e)
+const CHROME = srgb(0x9aa1a6)
+
 /** Box part with a flat vertex color. Coordinates in chassis space (meters). */
 function box(
   w: number,
@@ -29,6 +35,33 @@ function box(
   return g
 }
 
+type Facing = '+x' | '-x' | '+z' | '-z'
+
+/**
+ * One-sided window pane facing outward: opaque from outside, invisible from the cabin
+ * (back-face culled), so the first-person view looks through it.
+ */
+function pane(
+  w: number,
+  h: number,
+  x: number,
+  y: number,
+  z: number,
+  facing: Facing,
+): THREE.BufferGeometry {
+  const g = new THREE.PlaneGeometry(w, h).toNonIndexed() // faces +Z
+  g.deleteAttribute('uv')
+  if (facing === '-z') g.rotateY(Math.PI)
+  else if (facing === '+x') g.rotateY(Math.PI / 2)
+  else if (facing === '-x') g.rotateY(-Math.PI / 2)
+  g.translate(x, y, z)
+  const count = g.getAttribute('position').count
+  const colors = new Float32Array(count * 3)
+  for (let i = 0; i < count; i++) colors.set(GLASS, i * 3)
+  g.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+  return g
+}
+
 function merge(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
   const merged = mergeGeometries(parts)
   for (const p of parts) p.dispose()
@@ -37,41 +70,40 @@ function merge(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
   return merged
 }
 
-const GLASS = srgb(0x27343d)
-const DARK = srgb(0x2b2b2b)
-const LIGHT = srgb(0xfff4c2)
-const TAIL = srgb(0xb3261e)
-const CHROME = srgb(0x9aa1a6)
-
 /** Classic camper van: two-tone body, tall roof, sliding door line. Origin = chassis center. */
 function vanParts(s: VehicleSpec): THREE.BufferGeometry[] {
   const [hx, hy, hz] = s.halfExtents
   const W = hx * 2
   const bottom = -hy
+  const eyeY = s.driverEye[1]
   const cream = srgb(0xf1ead8)
   const teal = srgb(0x3f8f8a)
+  const e = 0.01 // pane offset from body faces
   return [
-    // Lower body (teal) and upper body (cream)
+    // Two-tone boxy body, underbody
     box(W, 0.7, hz * 2, 0, bottom + 0.6, 0, teal),
+    box(W, 0.8, hz * 2, 0, bottom + 1.35, 0, cream),
     box(W - 0.3, 0.3, hz * 2 - 0.4, 0, bottom + 0.2, 0, DARK),
-    box(W, 0.8, hz * 2 - 0.9, 0, bottom + 1.35, 0.45, cream),
-    // Cab (sloped look with a shorter upper block)
-    box(W - 0.04, 0.55, 0.7, 0, bottom + 1.22, -hz + 0.6, cream),
-    // Windshield and side windows
-    box(W - 0.2, 0.5, 0.04, 0, bottom + 1.22, -hz + 0.24, GLASS),
-    box(W + 0.02, 0.42, 1.0, 0, bottom + 1.3, -hz + 1.2, GLASS),
-    box(W + 0.02, 0.38, 1.6, 0, bottom + 1.36, 0.6, GLASS),
+    // Windows: windshield, cab sides, rear-cabin sides, rear
+    pane(W - 0.2, 0.5, 0, bottom + 1.35, -hz - e, '-z'),
+    pane(0.9, 0.45, -hx - e, bottom + 1.38, -hz + 0.75, '-x'),
+    pane(0.9, 0.45, hx + e, bottom + 1.38, -hz + 0.75, '+x'),
+    pane(2.4, 0.4, -hx - e, bottom + 1.4, 0.55, '-x'),
+    pane(2.4, 0.4, hx + e, bottom + 1.4, 0.55, '+x'),
+    pane(W - 0.5, 0.4, 0, bottom + 1.4, hz + e, '+z'),
+    // Dashboard and steering wheel (seen from the driver seat)
+    box(W - 0.1, 0.3, 0.45, 0, eyeY - 0.5, -hz + 0.3, DARK),
+    box(0.4, 0.4, 0.05, s.driverEye[0], eyeY - 0.4, -hz + 0.62, DARK),
     // Roof rack
     box(W - 0.3, 0.06, hz * 1.3, 0, bottom + 1.8, 0.4, DARK),
-    // Bumpers, lights
+    // Bumpers, lights, grille
     box(W + 0.06, 0.2, 0.18, 0, bottom + 0.3, -hz - 0.05, CHROME),
     box(W + 0.06, 0.2, 0.18, 0, bottom + 0.3, hz + 0.05, CHROME),
-    box(0.26, 0.16, 0.04, -hx + 0.25, bottom + 0.6, -hz - 0.01, LIGHT),
-    box(0.26, 0.16, 0.04, hx - 0.25, bottom + 0.6, -hz - 0.01, LIGHT),
+    box(0.26, 0.16, 0.04, -hx + 0.25, bottom + 0.65, -hz - 0.01, LIGHT),
+    box(0.26, 0.16, 0.04, hx - 0.25, bottom + 0.65, -hz - 0.01, LIGHT),
     box(0.16, 0.3, 0.04, -hx + 0.15, bottom + 0.75, hz + 0.01, TAIL),
     box(0.16, 0.3, 0.04, hx - 0.15, bottom + 0.75, hz + 0.01, TAIL),
-    // Grille
-    box(0.9, 0.3, 0.04, 0, bottom + 0.55, -hz - 0.01, DARK),
+    box(0.9, 0.3, 0.04, 0, bottom + 0.6, -hz - 0.01, DARK),
   ]
 }
 
@@ -88,8 +120,13 @@ function offroadParts(s: VehicleSpec): THREE.BufferGeometry[] {
     box(W - 0.06, 0.12, 1.3, 0, bottom + 0.81, -hz + 0.65, olive),
     // Cabin
     box(W - 0.06, 0.7, hz * 2 - 1.4, 0, bottom + 1.1, 0.7, sand),
-    box(W - 0.16, 0.55, 0.04, 0, bottom + 1.12, -hz + 1.38, GLASS),
-    box(W - 0.02, 0.45, hz * 2 - 1.8, 0, bottom + 1.15, 0.6, GLASS),
+    pane(W - 0.16, 0.5, 0, bottom + 1.12, -hz + 1.39, '-z'),
+    pane(hz * 2 - 1.9, 0.42, -hx + 0.02, bottom + 1.15, 0.65, '-x'),
+    pane(hz * 2 - 1.9, 0.42, hx - 0.02, bottom + 1.15, 0.65, '+x'),
+    pane(W - 0.5, 0.36, 0, bottom + 1.18, hz + 0.01, '+z'),
+    // Dashboard and steering wheel
+    box(W - 0.2, 0.2, 0.35, 0, s.driverEye[1] - 0.4, -hz + 1.5, DARK),
+    box(0.38, 0.38, 0.05, s.driverEye[0], s.driverEye[1] - 0.32, -hz + 1.75, DARK),
     // Roof bars
     box(0.06, 0.08, hz * 2 - 1.5, -hx + 0.15, bottom + 1.5, 0.7, DARK),
     box(0.06, 0.08, hz * 2 - 1.5, hx - 0.15, bottom + 1.5, 0.7, DARK),

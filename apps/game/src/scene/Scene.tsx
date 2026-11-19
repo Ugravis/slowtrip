@@ -6,7 +6,7 @@ import { parseSeed } from '../core/rng'
 import { Game } from '../game/Game'
 import { useGameStore } from '../game/store'
 import { loadRapier } from '../physics/physics'
-import { CHUNK_SIZE, DEFAULT_SEED } from '../world/constants'
+import { CHUNK_SIZE } from '../world/constants'
 
 const SKY = '#a8c8e0'
 
@@ -19,7 +19,10 @@ export function Scene({ quality }: { quality: QualitySettings }) {
   useEffect(() => {
     let alive = true
     let created: Game | null = null
-    const seed = parseSeed(new URLSearchParams(window.location.search).get('seed'), DEFAULT_SEED)
+    // New world on every load, unless `?seed=` pins one (debug, sharing). Choosing the seed
+    // is not generation: generation itself stays deterministic from this value.
+    const randomSeed = Math.floor(Math.random() * 2 ** 32)
+    const seed = parseSeed(new URLSearchParams(window.location.search).get('seed'), randomSeed)
     void loadRapier().then((rapier) => {
       if (!alive) return
       created = new Game(rapier, seed, quality, camera)
