@@ -37,7 +37,6 @@
 ## Interaction & Git
 - Language: French for discussion, English for code/docs/commits.
 - Git: Gitflow, Conventional Commits (no AI/Claude mentions). User validates PRs.
-- Branches: `main` and `dev` are protected (PR + green CI required). Branch from `dev` (`feature/*`, `fix/*`, `chore/*`); `hotfix/*` from `main`.
 
 ## File Inspection & Token Guardrails
 - Source code: Max 150 lines per read. If > 150 lines, locate targets via `grep -n` and inspect using `offset`/`limit`.
