@@ -1,8 +1,17 @@
-import { LayersIcon, LocateFixedIcon, MinusIcon, PlusIcon, RadarIcon, XIcon } from 'lucide-react'
+import {
+  LayersIcon,
+  LocateFixedIcon,
+  MapIcon,
+  MinusIcon,
+  PlusIcon,
+  RadarIcon,
+  XIcon,
+} from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { Game } from '../../game/Game'
 import { BIOME_NAMES, BIOME_SRGB, WATER_SRGB, type Rgb } from '../../world/terrain/biomes'
 import type { MapLayer } from '../../world/terrain/mapTile'
+import type { MapOverview } from '../../world/terrain/mapTiles'
 import { clampZoom, useMapCanvas } from './Minimap'
 
 /** Full map can zoom out further than the minimap: tiles only exist where the player went. */
@@ -12,6 +21,13 @@ const FULL_ZOOM_DEFAULT = 4
 const REVEAL_RADIUS = 32
 /** Zoom (m/px) after a reveal, to see the whole revealed area. */
 const REVEAL_ZOOM = 8
+
+/** Dev overview: area edge (m), resolution (m/px), zoom-out limit, and how far the view may
+ * move from the image center before it is regenerated (m). */
+const OVERVIEW_SIZE = 12000
+const OVERVIEW_SCALE = 16
+const OVERVIEW_ZOOM_MAX = 48
+const OVERVIEW_REFRESH = 3500
 
 const css = ([r, g, b]: Rgb) => `rgb(${r * 255} ${g * 255} ${b * 255})`
 
@@ -27,6 +43,41 @@ export function FullMap({ game, onClose }: { game: Game; onClose: () => void }) 
   const pinch = useRef(0)
   const pending = useRef(false)
   const [layer, setLayer] = useState<MapLayer>('terrain')
+  const [overviewOn, setOverviewOn] = useState(false)
+  const [overviewBusy, setOverviewBusy] = useState(false)
+  const overview = useRef<(MapOverview & { cx: number; cz: number; layer: MapLayer }) | null>(null)
+  const overviewPending = useRef(false)
+  const zoomMax = overviewOn ? OVERVIEW_ZOOM_MAX : FULL_ZOOM_MAX
+
+  /** Regenerates the overview around the view center when it moved far enough away. */
+  const refreshOverview = (cx: number, cz: number) => {
+    const o = overview.current
+    if (overviewPending.current) return
+    if (
+      o &&
+      o.layer === layer &&
+      Math.max(Math.abs(cx - o.cx), Math.abs(cz - o.cz)) < OVERVIEW_REFRESH
+    ) {
+      return
+    }
+    overviewPending.current = true
+    setOverviewBusy(true)
+    const area = {
+      centerX: cx,
+      centerZ: cz,
+      width: OVERVIEW_SIZE,
+      height: OVERVIEW_SIZE,
+      scale: OVERVIEW_SCALE,
+      layer,
+    }
+    void game.mapTiles.overview(area).then((img) => {
+      overview.current?.bitmap.close()
+      overview.current = { ...img, cx, cz, layer: area.layer }
+      overviewPending.current = false
+      // Redraws through the effect below.
+      setOverviewBusy(false)
+    })
+  }
 
   const redraw = useMapCanvas(canvas, game, (view) => {
     view.centerX += pan.current.x
@@ -36,6 +87,8 @@ export function FullMap({ game, onClose }: { game: Game; onClose: () => void }) 
     view.northMarker = false
     view.layer = layer
     view.labels = true
+    view.overview = overviewOn ? overview.current : null
+    if (overviewOn) refreshOverview(view.centerX, view.centerZ)
   })
 
   /** Redraws on the next animation frame (coalesces pointer events). */
@@ -49,11 +102,12 @@ export function FullMap({ game, onClose }: { game: Game; onClose: () => void }) 
   }
 
   const zoomBy = (f: number) => {
-    zoom.current = clampZoom(zoom.current * f, FULL_ZOOM_MAX)
+    zoom.current = clampZoom(zoom.current * f, zoomMax)
     schedule()
   }
 
-  useEffect(() => redraw.current(), [layer, redraw])
+  useEffect(() => redraw.current(), [layer, overviewOn, overviewBusy, redraw])
+  useEffect(() => () => overview.current?.bitmap.close(), [])
 
   useEffect(() => {
     if (document.pointerLockElement) document.exitPointerLock()
@@ -75,6 +129,21 @@ export function FullMap({ game, onClose }: { game: Game; onClose: () => void }) 
         ref={canvas}
         className="map-full-canvas"
         onWheel={(e) => zoomBy(e.deltaY > 0 ? 1.2 : 1 / 1.2)}
+        onDoubleClick={
+          import.meta.env.DEV
+            ? (e) => {
+                // Dev: teleport to the clicked point (snaps onto the road when close).
+                const rect = e.currentTarget.getBoundingClientRect()
+                const pose = { x: 0, y: 0, z: 0, heading: 0 }
+                game.pose(pose)
+                game.teleport(
+                  pose.x + pan.current.x + (e.clientX - rect.left - rect.width / 2) * zoom.current,
+                  pose.z + pan.current.z + (e.clientY - rect.top - rect.height / 2) * zoom.current,
+                )
+                onClose()
+              }
+            : undefined
+        }
         onPointerDown={(e) => {
           e.currentTarget.setPointerCapture(e.pointerId)
           pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
@@ -144,6 +213,22 @@ export function FullMap({ game, onClose }: { game: Game; onClose: () => void }) 
         </button>
         {import.meta.env.DEV && (
           <button
+            className={overviewOn ? 'hud-btn icon active' : 'hud-btn icon'}
+            onClick={() => {
+              if (overviewOn) zoom.current = clampZoom(zoom.current, FULL_ZOOM_MAX)
+              else
+                zoom.current = clampZoom(Math.max(zoom.current, OVERVIEW_SCALE), OVERVIEW_ZOOM_MAX)
+              setOverviewOn(!overviewOn)
+            }}
+            aria-pressed={overviewOn}
+            aria-label="World overview (dev)"
+            title={`Dev: world and road overview (${OVERVIEW_SIZE / 1000} km), double-click to teleport`}
+          >
+            <MapIcon size={18} />
+          </button>
+        )}
+        {import.meta.env.DEV && (
+          <button
             className="hud-btn icon"
             onClick={() => {
               game.revealAround(REVEAL_RADIUS)
@@ -174,7 +259,9 @@ export function FullMap({ game, onClose }: { game: Game; onClose: () => void }) 
             </span>
           </>
         ) : (
-          '▲ peak · )( pass · explored area only · drag to pan · wheel or pinch to zoom'
+          `${overviewOn ? (overviewBusy ? 'generating overview… · ' : 'overview: road in red, bridges in yellow · ') : ''}▲ peak · )( pass${overviewOn ? '' : ' · explored area only'} · drag to pan · wheel or pinch to zoom${
+            import.meta.env.DEV ? ' · dev: double-click to teleport' : ''
+          }`
         )}
       </div>
     </div>

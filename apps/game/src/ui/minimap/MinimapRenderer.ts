@@ -1,7 +1,7 @@
 import { CHUNK_SIZE } from '../../world/constants'
 import { FEATURE_REGION, type MapFeature } from '../../world/terrain/mapFeatures'
 import { MAP_TILE_PX, type MapLayer } from '../../world/terrain/mapTile'
-import type { MapTileSource } from '../../world/terrain/mapTiles'
+import type { MapOverview, MapTileSource } from '../../world/terrain/mapTiles'
 import { packChunk, unpackChunkX, unpackChunkZ } from '../../world/terrain/TerrainSystem'
 
 const STEP = CHUNK_SIZE / MAP_TILE_PX
@@ -36,6 +36,8 @@ export interface MinimapView {
   layer: MapLayer
   /** Altitude labels next to peaks and passes (full map). */
   labels: boolean
+  /** Dev overview drawn under the explored tiles, whatever was explored (full map). */
+  overview: MapOverview | null
 }
 
 export interface MinimapMarker {
@@ -105,6 +107,17 @@ export class MinimapRenderer {
     const requested = this.requested[view.layer]
     const queue: { key: number; d: number }[] = []
     this.visibleRegions.clear()
+    const ov = view.overview
+    if (ov) {
+      ctx.imageSmoothingEnabled = view.zoom > ov.scale * 0.5
+      ctx.drawImage(
+        ov.bitmap,
+        ov.x0 - ox,
+        ov.z0 - oz,
+        ov.bitmap.width * ov.scale,
+        ov.bitmap.height * ov.scale,
+      )
+    }
     // One screen pixel of overlap hides antialiased seams between scaled tiles.
     const seam = CHUNK_SIZE + view.zoom
     ctx.imageSmoothingEnabled = view.zoom > STEP * 0.5

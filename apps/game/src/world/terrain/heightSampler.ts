@@ -1,6 +1,7 @@
 import { createNoise2D, type NoiseFunction2D } from 'simplex-noise'
 import { mulberry32 } from '../../core/rng'
 import { WATER_LEVEL } from '../constants'
+import { ROAD_FLAT_HALF, ROAD_MAX_BANK, RoadNetwork, type RoadHit } from '../road/roadNetwork'
 import { Biome } from './biomes'
 
 export type HeightSampler = (x: number, z: number) => number
@@ -12,12 +13,16 @@ export interface TerrainPoint {
   hills: number
   alpine: number
   lake: number
+  /** Distance to the road centerline (m), Infinity when out of the road's reach. */
+  road: number
   /** Dominant biome. */
   biome: Biome
 }
 
 export interface WorldGen {
   height: HeightSampler
+  /** Main road, placed on the raw terrain. The terrain is leveled around it. */
+  roads: RoadNetwork
   /** Fills `out` with the height and biome at world coordinates (x, z). */
   sample(x: number, z: number, out: TerrainPoint): TerrainPoint
 }
@@ -28,6 +33,7 @@ export const createTerrainPoint = (): TerrainPoint => ({
   hills: 0,
   alpine: 0,
   lake: 0,
+  road: Infinity,
   biome: Biome.Valley,
 })
 
@@ -105,7 +111,7 @@ export function createWorldGen(seed: number): WorldGen {
   const detailN = createNoise2D(rand)
   const lakeN = createNoise2D(rand)
 
-  const sample = (x: number, z: number, out: TerrainPoint): TerrainPoint => {
+  const sampleRaw = (x: number, z: number, out: TerrainPoint): TerrainPoint => {
     // Biome field, domain-warped for organic borders.
     const wx = x + warpX(x / 1100, z / 1100) * 200
     const wz = z + warpZ(x / 1100, z / 1100) * 200
@@ -150,11 +156,34 @@ export function createWorldGen(seed: number): WorldGen {
     }
     if (lake > best) biome = Biome.Lake
     out.biome = biome
+    out.road = Infinity
+    return out
+  }
+
+  // The road is laid out on the raw terrain, then the terrain is leveled around it:
+  // flat platform, then a cut or fill slope whose width grows with the height gap.
+  const roads = new RoadNetwork(seed, sampleRaw)
+  const hit: RoadHit = { dist: 0, h: 0, bridge: false }
+  const sample = (x: number, z: number, out: TerrainPoint): TerrainPoint => {
+    sampleRaw(x, z, out)
+    if (roads.query(x, z, hit)) {
+      const raw = out.height
+      // Under a bridge only dry ground is leveled (approach embankments, flush with the deck
+      // ends), fading out at the water line: the lake itself is left untouched.
+      const dry = hit.bridge ? smoothstep(WATER_LEVEL - 1.5, WATER_LEVEL + 0.5, raw) : 1
+      if (dry > 0) {
+        const gap = Math.abs(raw - hit.h)
+        const bank = Math.min(ROAD_MAX_BANK, Math.max(3, gap * 1.6 + 2))
+        const t = smoothstep(ROAD_FLAT_HALF, ROAD_FLAT_HALF + bank, hit.dist)
+        out.height = raw + (hit.h + (raw - hit.h) * t - raw) * dry
+      }
+      out.road = hit.dist
+    }
     return out
   }
 
   const scratch = createTerrainPoint()
-  return { sample, height: (x, z) => sample(x, z, scratch).height }
+  return { sample, roads, height: (x, z) => sample(x, z, scratch).height }
 }
 
 /** Terrain height in meters at world coordinates (x, z). Depends only on the seed. */

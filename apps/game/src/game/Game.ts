@@ -18,11 +18,15 @@ import {
   type WorldGen,
 } from '../world/terrain/heightSampler'
 import { MapTileSource } from '../world/terrain/mapTiles'
-import { findFlatSpot } from '../world/terrain/spawn'
+import { bandOf } from '../world/road/roadNetwork'
+import { roadSpot } from '../world/terrain/spawn'
 import { TerrainSystem } from '../world/terrain/TerrainSystem'
 import { Water } from '../world/water/Water'
 import { CHUNK_SIZE } from '../world/constants'
 import { useGameStore } from './store'
+
+/** Teleports snap onto the road within this distance (m). */
+const ROAD_SNAP = 400
 
 /** Max distance (m) from a vehicle's side to get in. */
 const ENTER_MARGIN = 1.6
@@ -107,11 +111,23 @@ export class Game {
     this.vehicles = new VehicleSystem(this.physics, this.terrain)
     this.cameraRig = new CameraRig(camera, (x, z) => this.heightAtLocal(x, z))
 
-    const { x, z } = findFlatSpot(this.height)
-    this.vehicles.add(VAN, x - 2.5, this.heightAtLocal(x - 2.5, z) + 2, z, 0)
-    this.vehicles.add(OFFROAD, x + 2.5, this.heightAtLocal(x + 2.5, z) + 2, z, 0)
-    // Start on foot, behind the two parked vehicles.
-    this.character = new Character(this.physics, x, this.heightAtLocal(x, z + 8) + 0.5, z + 8)
+    // Spawn bands are generated here once; later bands come from the terrain worker so the
+    // main thread never runs the road search during play.
+    const roads = this.world.roads
+    roads.band(-1)
+    roads.band(0)
+    roads.generate = false
+    roads.onMissing = (k) => {
+      void this.terrain.roadBand(k).then((d) => roads.insert(k, d))
+    }
+    // Van in the northbound lane, the off-roader parked on the shoulder behind it.
+    const van = roadSpot(roads, 0, 1.75)
+    this.vehicles.add(VAN, van.x, this.heightAtLocal(van.x, van.z) + 2, van.z, van.yaw)
+    const off = roadSpot(roads, 14, 4.8)
+    this.vehicles.add(OFFROAD, off.x, this.heightAtLocal(off.x, off.z) + 2, off.z, off.yaw)
+    // Start on foot, behind the van.
+    const me = roadSpot(roads, 8, 1.75)
+    this.character = new Character(this.physics, me.x, this.heightAtLocal(me.x, me.z) + 0.5, me.z)
     this.character.setActive(false)
     useGameStore.getState().setMode('onFoot')
     this.dayNight.apply(this.sky)
@@ -148,6 +164,31 @@ export class Game {
       Math.floor((t.z + this.origin.z) / CHUNK_SIZE),
       radius,
     )
+  }
+
+  /**
+   * Dev: moves the player, with the driven vehicle, to world (x, z). Snaps onto the road's
+   * northbound lane when it is within ROAD_SNAP meters. The vehicle waits, frozen, for its
+   * terrain collider (see VehicleSystem.updateEnabled).
+   */
+  teleport(x: number, z: number): void {
+    const spot = this.world.roads.closestSpot(x, z, ROAD_SNAP, 1.75)
+    const tx = (spot ? spot.x : x) - this.origin.x
+    const tz = (spot ? spot.z : z) - this.origin.z
+    const ground = this.heightAtLocal(tx, tz)
+    if (this.driven) {
+      const q = this.driven.body.rotation()
+      const yaw = spot ? spot.yaw : 2 * Math.atan2(q.y, q.w)
+      this.driven.place(tx, ground, tz, yaw)
+      this.driven.body.setEnabled(false)
+      this.vehicles.resetInterpolation()
+    } else {
+      this.character.body.setTranslation({ x: tx, y: ground + 1, z: tz }, true)
+      this.character.body.setLinvel({ x: 0, y: 0, z: 0 }, true)
+      this.character.setActive(false)
+      this.character.resetInterpolation()
+    }
+    this.cameraRig.reset()
   }
 
   /** Speed of the driven vehicle in km/h (0 on foot). */
@@ -239,6 +280,9 @@ export class Game {
 
     const focus = this.driven ? this.driven.body.translation() : this.character.body.translation()
     this.terrain.update(focus.x, focus.z)
+    // Request the road bands around the player ahead of time (no-op once cached).
+    const band = bandOf(focus.z + this.origin.z)
+    for (let k = band - 1; k <= band + 1; k++) this.world.roads.band(k)
     const shift = this.origin.rebaseFor(focus.x, focus.z)
     if (shift) {
       this.origin.apply(shift.dx, shift.dz)

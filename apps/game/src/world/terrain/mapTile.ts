@@ -1,5 +1,6 @@
 import { CHUNK_SIZE, WATER_LEVEL } from '../constants'
 import { BIOME_SRGB, terrainColor, WATER_SRGB } from './biomes'
+import { ROAD_HALF_WIDTH } from '../road/roadNetwork'
 import { createTerrainPoint, type WorldGen } from './heightSampler'
 
 export type MapLayer = 'terrain' | 'biomes'
@@ -8,6 +9,7 @@ export type MapLayer = 'terrain' | 'biomes'
 export const MAP_TILE_PX = 32
 
 const _rgb = new Float32Array(3)
+const ROAD_SRGB = [0.3, 0.3, 0.32] as const
 
 /**
  * RGBA pixels of the top-down map tile for chunk (cx, cz): terrain or biome colors with a
@@ -26,6 +28,7 @@ export function mapTilePixels(
   const wv = new Float32Array(g * g)
   const wa = new Float32Array(g * g)
   const wl = new Float32Array(g * g)
+  const road = new Float32Array(g * g)
   const pt = createTerrainPoint()
   const ox = cx * CHUNK_SIZE
   const oz = cz * CHUNK_SIZE
@@ -37,6 +40,7 @@ export function mapTilePixels(
       wv[k] = pt.valley
       wa[k] = pt.alpine
       wl[k] = pt.lake
+      road[k] = pt.road
     }
   }
 
@@ -78,6 +82,13 @@ export function mapTilePixels(
           }
         } else {
           terrainColor(_rgb, 0, y, ny, valley, hills, alpine, lake)
+        }
+        // Road: drawn a bit wider than the asphalt so it stays visible when zoomed out.
+        const rd = Math.min(road[k] as number, road[k + g + 1] as number)
+        if (rd < ROAD_HALF_WIDTH + 1) {
+          _rgb[0] = ROAD_SRGB[0]
+          _rgb[1] = ROAD_SRGB[1]
+          _rgb[2] = ROAD_SRGB[2]
         }
         const lit = Math.max(-1, Math.min(1, (gx + gz) * 0.9))
         shade = 0.86 + 0.3 * lit + Math.max(-0.08, Math.min(0.12, y * 0.0012))
