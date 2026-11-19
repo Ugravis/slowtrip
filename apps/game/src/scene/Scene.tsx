@@ -1,24 +1,43 @@
-import { OrbitControls } from '@react-three/drei'
+import { useFrame, useThree } from '@react-three/fiber'
+import { useEffect, useState } from 'react'
+import type * as THREE from 'three'
+import type { QualitySettings } from '../core/quality'
+import { parseSeed } from '../core/rng'
+import { Game } from '../game/Game'
+import { loadRapier } from '../physics/physics'
+import { CHUNK_SIZE, DEFAULT_SEED } from '../world/constants'
 
-/** Placeholder scene: proves the render pipeline works. Replaced by terrain (#4). */
-export function Scene() {
+const SKY = '#a8c8e0'
+
+export function Scene({ quality }: { quality: QualitySettings }) {
+  const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera
+  const [game, setGame] = useState<Game | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    let created: Game | null = null
+    const seed = parseSeed(new URLSearchParams(window.location.search).get('seed'), DEFAULT_SEED)
+    void loadRapier().then((rapier) => {
+      if (!alive) return
+      created = new Game(rapier, seed, quality, camera)
+      setGame(created)
+    })
+    return () => {
+      alive = false
+      created?.dispose()
+    }
+  }, [camera, quality])
+
+  useFrame((_, dt) => game?.update(Math.min(dt, 0.1)))
+
+  const fogFar = quality.viewRadius * CHUNK_SIZE
   return (
     <>
-      <color attach="background" args={['#a8c8e0']} />
-      <hemisphereLight args={['#dfefff', '#5a6b3a', 0.8]} />
-      <directionalLight position={[10, 15, 5]} intensity={1.2} />
-
-      <mesh rotation-x={-Math.PI / 2}>
-        <planeGeometry args={[50, 50]} />
-        <meshStandardMaterial color="#7a9a4a" flatShading />
-      </mesh>
-
-      <mesh position={[0, 0.5, 0]}>
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial color="#d9a441" flatShading />
-      </mesh>
-
-      <OrbitControls makeDefault />
+      <color attach="background" args={[SKY]} />
+      <fog attach="fog" args={[SKY, fogFar * 0.45, fogFar * 0.95]} />
+      <hemisphereLight args={['#dfefff', '#5a6b3a', 0.9]} />
+      <directionalLight position={[60, 100, 30]} intensity={1.4} />
+      {game && <primitive object={game.terrain.group} />}
     </>
   )
 }
