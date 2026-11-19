@@ -1,6 +1,7 @@
 {
   "name": "slowtrip",
   "private": true,
+  "type": "module",
   "packageManager": "pnpm@10.34.7",
   "engines": {
     "node": ">=22"
@@ -10,9 +11,14 @@
     "build": "turbo run build",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
-    "test": "turbo run test"
+    "test": "turbo run test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "devDependencies": {
-    "turbo": "^2.11.13"
+    "@slowtrip/config": "workspace:*",
+    "prettier": "^3.10.1",
+    "turbo": "^2.11.13",
+    "typescript": "~6.0.3"
   }
 }

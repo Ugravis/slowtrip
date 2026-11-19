@@ -1,6 +1,7 @@
 # Project Guidelines
 
 ## Stack & Commands
+
 - Monorepo: pnpm workspaces + Turborepo. `apps/game`, `apps/api`, `apps/admin`, `apps/site`, `packages/shared`, `packages/config`. Backend, admin and site are planned, not built yet.
 - Game: TypeScript (strict), Vite, React, React Three Fiber + drei, Three.js, Rapier (`@dimforge/rapier3d-compat`), `simplex-noise`, Web Workers + `comlink`, Zustand, Dexie (IndexedDB local cache).
 - API: Node.js LTS, Fastify, PostgreSQL, Drizzle ORM + drizzle-kit, Better Auth, Zod.
@@ -10,6 +11,7 @@
 - Commands: `pnpm dev`, `pnpm build`, `pnpm --filter <app> test <file>`, `pnpm lint --quiet`, `pnpm db:generate`, `pnpm db:migrate` (once scaffolded).
 
 ## Project Rules
+
 1. **Performance is rule #1.** Every feature is designed for a stable 60 fps on desktop and 30+ fps on mid-range mobile.
    - Zero allocations in hot loops (`useFrame`, physics step, systems): reuse `Vector3`/`Quaternion`/`Matrix4` scratch objects.
    - Never call React `setState` per frame. Use refs and Zustand transient updates (`getState`/`subscribe`).
@@ -35,15 +37,18 @@
 7. **Scope discipline.** Vertical slice first (see README roadmap). No feature from a later step before the current one ships.
 
 ## Interaction & Git
+
 - Language: French for discussion, English for code/docs/commits.
 - Git: Gitflow, Conventional Commits (no AI/Claude mentions). User validates PRs.
 
 ## File Inspection & Token Guardrails
+
 - Source code: Max 150 lines per read. If > 150 lines, locate targets via `grep -n` and inspect using `offset`/`limit`.
 - Configs/Locks/Data: NEVER read full lockfiles, logs, GeoJSON, GPX, or Docker files. Use `jq`, `yq`, `grep`, `head`, `tail`.
 - Tests: Run targeted files only (never full suite). Silence linters (`--quiet`).
 
 ## Output Rules
+
 - Output changed lines only (minimal diff style).
 - No unrequested architectural overhauls or passive code echoes.
 
@@ -52,6 +57,7 @@
 Spawn subagents to isolate context, parallelize independent work, or offload bulk mechanical tasks. Don't spawn when the parent needs the reasoning, when synthesis requires holding things together, or when spawn overhead dominates.
 
 Pick the cheapest model that can do the subtask well:
+
 - Haiku: bulk mechanical work, no judgment
 - Sonnet: scoped research, code exploration, in-scope synthesis
 - Opus: subtasks needing real planning or tradeoffs
