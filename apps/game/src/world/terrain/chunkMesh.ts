@@ -1,6 +1,7 @@
 import { hash2 } from '../../core/rng'
 import { CHUNK_SIZE } from '../constants'
-import type { HeightSampler } from './heightSampler'
+import { terrainColor } from './biomes'
+import { createTerrainPoint, type HeightSampler, type WorldGen } from './heightSampler'
 
 export interface ChunkMeshData {
   /** Non-indexed triangle positions, local to the chunk center. */
@@ -35,48 +36,39 @@ export function sampleChunkHeights(
   return heights
 }
 
-// Flat low-poly palette, authored in sRGB and converted to linear (vertex colors are linear).
-type Rgb = readonly [number, number, number]
-export type TerrainBand = 'sand' | 'grass' | 'dry' | 'rock' | 'snow'
-/** sRGB palette in [0, 1], shared with the minimap. */
-export const TERRAIN_SRGB: Record<TerrainBand, Rgb> = {
-  sand: [0.79, 0.72, 0.5],
-  grass: [0.42, 0.56, 0.27],
-  dry: [0.6, 0.6, 0.32],
-  rock: [0.5, 0.47, 0.43],
-  snow: [0.93, 0.94, 0.96],
-}
-const lin = ([r, g, b]: Rgb): Rgb => [r ** 2.2, g ** 2.2, b ** 2.2]
-const TERRAIN_LINEAR = Object.fromEntries(
-  Object.entries(TERRAIN_SRGB).map(([k, v]) => [k, lin(v)]),
-) as Record<TerrainBand, Rgb>
+/** Scratch sRGB color for face shading. */
+const _rgb = new Float32Array(3)
 
-/** Terrain band from height (m) and normal y. */
-export function terrainBand(y: number, ny: number): TerrainBand {
-  if (ny < 0.8) return 'rock'
-  if (y > 46) return 'snow'
-  if (y < -18) return 'sand'
-  if (y > 22) return 'dry'
-  return 'grass'
-}
-
-function faceColor(out: Float32Array, offset: number, y: number, ny: number, jitter: number): void {
-  const c = TERRAIN_LINEAR[terrainBand(y, ny)]
-  const k = 0.93 + jitter * 0.14
+function faceColor(
+  out: Float32Array,
+  offset: number,
+  y: number,
+  ny: number,
+  valley: number,
+  alpine: number,
+  lake: number,
+  jitter: number,
+): void {
+  terrainColor(_rgb, 0, y, ny, valley, 1 - valley - alpine - lake, alpine, lake)
+  // sRGB to linear (vertex colors are linear), with a slight per-face brightness variation.
+  const k = 0.96 + jitter * 0.08
+  const r = (_rgb[0] as number) ** 2.2 * k
+  const g = (_rgb[1] as number) ** 2.2 * k
+  const b = (_rgb[2] as number) ** 2.2 * k
   for (let v = 0; v < 3; v++) {
     const o = offset + v * 3
-    out[o] = c[0] * k
-    out[o + 1] = c[1] * k
-    out[o + 2] = c[2] * k
+    out[o] = r
+    out[o + 1] = g
+    out[o + 2] = b
   }
 }
 
 /**
  * Builds a flat-shaded chunk mesh at `res` cells per edge, with skirts hiding LOD cracks.
- * Pure and deterministic: depends only on (sampler seed, cx, cz, res).
+ * Pure and deterministic: depends only on (world seed, cx, cz, res).
  */
 export function buildChunkMesh(
-  sample: HeightSampler,
+  gen: WorldGen,
   seed: number,
   cx: number,
   cz: number,
@@ -86,7 +78,24 @@ export function buildChunkMesh(
   const n = res + 1
   const step = CHUNK_SIZE / res
   const half = CHUNK_SIZE / 2
-  const heights = sampleChunkHeights(sample, cx, cz, res)
+  const x0w = cx * CHUNK_SIZE
+  const z0w = cz * CHUNK_SIZE
+  // Heights and biome weights per vertex (x-major, like sampleChunkHeights).
+  const heights = new Float32Array(n * n)
+  const valleyW = new Float32Array(n * n)
+  const alpineW = new Float32Array(n * n)
+  const lakeW = new Float32Array(n * n)
+  const pt = createTerrainPoint()
+  for (let ix = 0; ix < n; ix++) {
+    for (let iz = 0; iz < n; iz++) {
+      gen.sample(x0w + ix * step, z0w + iz * step, pt)
+      const i = ix * n + iz
+      heights[i] = pt.height
+      valleyW[i] = pt.valley
+      alpineW[i] = pt.alpine
+      lakeW[i] = pt.lake
+    }
+  }
 
   const triCount = res * res * 2 + res * 4 * 2
   const positions = new Float32Array(triCount * 9)
@@ -97,6 +106,15 @@ export function buildChunkMesh(
   let maxY = -Infinity
 
   const h = (ix: number, iz: number) => heights[ix * n + iz] as number
+  // Biome weights of the current cell (or border vertex for skirts).
+  let wv = 0
+  let wa = 0
+  let wl = 0
+  const setWeights = (ix: number, iz: number) => {
+    wv = valleyW[ix * n + iz] as number
+    wa = alpineW[ix * n + iz] as number
+    wl = lakeW[ix * n + iz] as number
+  }
 
   const tri = (
     ax: number,
@@ -138,7 +156,7 @@ export function buildChunkMesh(
       normals[p + v + 1] = ny
       normals[p + v + 2] = nz
     }
-    faceColor(colors, p, (ay + by + qy) / 3, ny, jitter)
+    faceColor(colors, p, (ay + by + qy) / 3, ny, wv, wa, wl, jitter)
     p += 9
   }
 
@@ -153,6 +171,12 @@ export function buildChunkMesh(
         h01 = h(ix, iz + 1),
         h11 = h(ix + 1, iz + 1)
       const j = hash2(seed, cx * 4096 + ix, cz * 4096 + iz)
+      // Cell-average biome weights: both triangles share them.
+      const c00 = ix * n + iz
+      const c11 = (ix + 1) * n + iz + 1
+      wv = ((valleyW[c00] as number) + (valleyW[c11] as number)) * 0.5
+      wa = ((alpineW[c00] as number) + (alpineW[c11] as number)) * 0.5
+      wl = ((lakeW[c00] as number) + (lakeW[c11] as number)) * 0.5
       // Counter-clockwise seen from above (+Y normal).
       tri(x0, h00, z0, x0, h01, z1, x1, h10, z0, j)
       tri(x1, h10, z0, x0, h01, z1, x1, h11, z1, (j * 7.31) % 1)
@@ -169,6 +193,7 @@ export function buildChunkMesh(
     const b = a + step
     // -Z edge (iz = 0), normal -Z
     {
+      setWeights(i, 0)
       const ha = h(i, 0),
         hb = h(i + 1, 0)
       tri(a, ha, -half, b, hb, -half, a, ha - skirtDepth, -half, 0.5)
@@ -176,6 +201,7 @@ export function buildChunkMesh(
     }
     // +Z edge (iz = res), normal +Z
     {
+      setWeights(i, res)
       const ha = h(i, res),
         hb = h(i + 1, res)
       tri(a, ha, half, a, ha - skirtDepth, half, b, hb, half, 0.5)
@@ -183,6 +209,7 @@ export function buildChunkMesh(
     }
     // -X edge (ix = 0), normal -X
     {
+      setWeights(0, i)
       const ha = h(0, i),
         hb = h(0, i + 1)
       tri(-half, ha, a, -half, ha - skirtDepth, a, -half, hb, b, 0.5)
@@ -190,6 +217,7 @@ export function buildChunkMesh(
     }
     // +X edge (ix = res), normal +X
     {
+      setWeights(res, i)
       const ha = h(res, i),
         hb = h(res, i + 1)
       tri(half, ha, a, half, hb, b, half, ha - skirtDepth, a, 0.5)

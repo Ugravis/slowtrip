@@ -95,6 +95,7 @@ export function Scene({ quality }: { quality: QualitySettings }) {
         </Suspense>
       )}
       {game && <primitive object={game.terrain.group} />}
+      {game && <primitive object={game.water.mesh} />}
       {game && <primitive object={game.vehicles.group} />}
     </>
   )

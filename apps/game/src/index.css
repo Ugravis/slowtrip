@@ -392,3 +392,16 @@ body,
   font-weight: 500;
   white-space: nowrap;
 }
+
+.map-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0 6px;
+}
+
+.map-legend-item i {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}

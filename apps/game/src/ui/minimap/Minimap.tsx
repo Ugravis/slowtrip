@@ -13,7 +13,7 @@ const renderers = new WeakMap<Game, MinimapRenderer>()
 function rendererFor(game: Game): MinimapRenderer {
   let r = renderers.get(game)
   if (!r) {
-    r = new MinimapRenderer(game.height, game.terrain.explored)
+    r = new MinimapRenderer(game.mapTiles, game.terrain.explored)
     renderers.set(game, r)
   }
   return r
@@ -44,6 +44,8 @@ function startMapLoop(
     zoom: 1,
     rotate: false,
     northMarker: false,
+    layer: 'terrain',
+    labels: false,
   }
   const markers: MinimapMarker[] = game.vehicles.entities.map(() => ({
     x: 0,
