@@ -38,6 +38,7 @@ export function Hud() {
         <div className="crosshair" />
       )}
       <div ref={hint} className="hud-hint" />
+      <div className="hud-seed">seed {game.seed}</div>
       {isTouch() ? (
         <TouchControls input={game.input} mode={mode} />
       ) : (

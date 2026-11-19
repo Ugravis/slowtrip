@@ -132,3 +132,11 @@ body,
   pointer-events: auto;
   touch-action: none;
 }
+
+.hud-seed {
+  position: absolute;
+  left: max(16px, env(safe-area-inset-left));
+  top: max(12px, env(safe-area-inset-top));
+  font-size: 12px;
+  opacity: 0.7;
+}
