@@ -1,10 +1,12 @@
 import * as THREE from 'three'
+import { Character } from '../character/Character'
 import type { Vehicle } from '../vehicles/Vehicle'
 
 const _target = new THREE.Vector3()
 const _desired = new THREE.Vector3()
 const _fwd = new THREE.Vector3()
 const _q = new THREE.Quaternion()
+const _euler = new THREE.Euler(0, 0, 0, 'YXZ')
 
 /** Drives the render camera from the player state. */
 export class CameraRig {
@@ -32,6 +34,14 @@ export class CameraRig {
 
     this.camera.position.lerp(_desired, 1 - Math.exp(-dt * 5))
     this.camera.lookAt(_target)
+  }
+
+  /** First-person view from the character's eyes. */
+  firstPersonCharacter(character: Character): void {
+    const t = character.body.translation()
+    this.camera.position.set(t.x, t.y + Character.EYE_OFFSET, t.z)
+    _euler.set(character.pitch, character.yaw, 0)
+    this.camera.quaternion.setFromEuler(_euler)
   }
 
   /** Moves the camera with the floating origin. */

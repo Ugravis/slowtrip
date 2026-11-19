@@ -12,6 +12,7 @@ const SKY = '#a8c8e0'
 
 export function Scene({ quality }: { quality: QualitySettings }) {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera
+  const canvas = useThree((s) => s.gl.domElement)
   const [game, setGame] = useState<Game | null>(null)
   const publish = useGameStore((s) => s.setGame)
 
@@ -32,6 +33,8 @@ export function Scene({ quality }: { quality: QualitySettings }) {
       created?.dispose()
     }
   }, [camera, quality, publish])
+
+  useEffect(() => game?.input.attachPointerLock(canvas), [game, canvas])
 
   useFrame((_, dt) => game?.update(Math.min(dt, 0.1)))
 
