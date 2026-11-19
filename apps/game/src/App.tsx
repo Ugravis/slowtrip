@@ -1,14 +1,17 @@
 import { Canvas } from '@react-three/fiber'
+import { useState } from 'react'
+import { detectQuality } from './core/quality'
 import { Scene } from './scene/Scene'
 
 export function App() {
+  const [quality] = useState(detectQuality)
   return (
     <Canvas
-      dpr={[1, 2]}
-      camera={{ position: [6, 4, 8], fov: 60, near: 0.1, far: 1000 }}
-      gl={{ antialias: true, powerPreference: 'high-performance' }}
+      dpr={quality.dpr}
+      camera={{ position: [0, 40, 0], fov: 65, near: 0.1, far: 2000 }}
+      gl={{ antialias: quality.antialias, powerPreference: 'high-performance' }}
     >
-      <Scene />
+      <Scene quality={quality} />
     </Canvas>
   )
 }
