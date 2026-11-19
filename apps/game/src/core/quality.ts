@@ -11,9 +11,9 @@ export interface QualitySettings {
 }
 
 const PRESETS: Record<QualityTier, Omit<QualitySettings, 'tier'>> = {
-  low: { viewRadius: 3, dpr: [0.75, 1.25], antialias: false },
-  medium: { viewRadius: 4, dpr: [1, 1.5], antialias: true },
-  high: { viewRadius: 6, dpr: [1, 2], antialias: true },
+  low: { viewRadius: 4, dpr: [0.75, 1.25], antialias: false },
+  medium: { viewRadius: 8, dpr: [1, 1.5], antialias: true },
+  high: { viewRadius: 12, dpr: [1, 2], antialias: true },
 }
 
 function isTier(value: string | null): value is QualityTier {

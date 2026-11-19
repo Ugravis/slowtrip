@@ -151,6 +151,15 @@ export class Vehicle {
     c.updateVehicle(dt)
   }
 
+  /** Teleports the vehicle, upright and at rest, onto the ground at local (x, groundY, z). */
+  place(x: number, groundY: number, z: number, yaw: number): void {
+    const half = yaw / 2
+    this.body.setTranslation({ x, y: groundY + this.spec.halfExtents[1] + 1.2, z }, true)
+    this.body.setRotation({ x: 0, y: Math.sin(half), z: 0, w: Math.cos(half) }, true)
+    this.body.setLinvel({ x: 0, y: 0, z: 0 }, true)
+    this.body.setAngvel({ x: 0, y: 0, z: 0 }, true)
+  }
+
   /** Puts the vehicle back on its wheels at `groundY`, keeping its heading. */
   resetUpright(groundY: number): void {
     const t = this.body.translation()

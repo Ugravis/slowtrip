@@ -8,7 +8,8 @@ export const PHYSICS_RES = 32
 export function lodResolution(ring: number): number {
   if (ring <= 1) return 32
   if (ring <= 3) return 16
-  return 8
+  if (ring <= 6) return 8
+  return 4
 }
 
 /** Chunks within this ring around the player get a physics collider. */

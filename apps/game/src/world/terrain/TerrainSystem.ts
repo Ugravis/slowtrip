@@ -4,6 +4,8 @@ import * as THREE from 'three'
 import type { Physics } from '../../physics/physics'
 import { CHUNK_SIZE, COLLIDER_RING, lodResolution, PHYSICS_RES } from '../constants'
 import type { WorldOrigin } from '../origin'
+import type { RoadBandData } from '../road/roadGen'
+import { ROAD_HALF_WIDTH } from '../road/roadNetwork'
 import type { ChunkMeshData } from './chunkMesh'
 import type { TerrainWorkerApi } from './terrain.worker'
 
@@ -26,6 +28,18 @@ interface Job {
   kind: 'mesh' | 'collider'
   dist2: number
 }
+
+const BRIDGE_DECK_HALF = 0.4
+/** Bridge collider boxes: lateral offset, top height above the road, half width. */
+const BRIDGE_BOXES: readonly (readonly [number, number, number])[] = [
+  [0, 0, ROAD_HALF_WIDTH + 0.35],
+  [-(ROAD_HALF_WIDTH + 0.175), 0.9, 0.175],
+  [ROAD_HALF_WIDTH + 0.175, 0.9, 0.175],
+]
+const _euler = new THREE.Euler()
+const _quat = new THREE.Quaternion()
+const _up = new THREE.Vector3()
+const _side = new THREE.Vector3()
 
 const chunkKey = (cx: number, cz: number) => `${cx},${cz}`
 
@@ -86,6 +100,11 @@ export class TerrainSystem {
       this.refresh()
     }
     this.pump()
+  }
+
+  /** Road band k, computed on the terrain worker. */
+  roadBand(k: number): Promise<RoadBandData> {
+    return this.ready.then(() => this.api.roadBand(k))
   }
 
   /** Loaded chunk count (HUD). */
@@ -204,13 +223,13 @@ export class TerrainSystem {
     chunk.colliderPending = true
     this.inFlight++
     void this.ready
-      .then(() => this.api.heights(chunk.cx, chunk.cz, PHYSICS_RES))
-      .then((heights) => {
+      .then(() => this.api.collider(chunk.cx, chunk.cz, PHYSICS_RES))
+      .then(({ heights, bridges }) => {
         this.inFlight--
         chunk.colliderPending = false
         if (this.disposed || this.chunks.get(chunk.key) !== chunk) return
         if (chunk.ring > COLLIDER_RING + 1 || chunk.body) return
-        this.createCollider(chunk, heights)
+        this.createCollider(chunk, heights, bridges)
       })
   }
 
@@ -239,7 +258,7 @@ export class TerrainSystem {
     chunk.meshRes = res
   }
 
-  private createCollider(chunk: Chunk, heights: Float32Array): void {
+  private createCollider(chunk: Chunk, heights: Float32Array, bridges: Float32Array): void {
     const { rapier, world } = this.physics
     const body = world.createRigidBody(
       rapier.RigidBodyDesc.fixed().setTranslation(
@@ -256,6 +275,38 @@ export class TerrainSystem {
       }).setFriction(1),
       body,
     )
+    // Bridge decks: one oriented box per road segment, top face on the road surface.
+    for (let i = 0; i < bridges.length; i += 6) {
+      const ax = bridges[i] as number
+      const ay = bridges[i + 1] as number
+      const az = bridges[i + 2] as number
+      const ex = (bridges[i + 3] as number) - ax
+      const ey = (bridges[i + 4] as number) - ay
+      const ez = (bridges[i + 5] as number) - az
+      const run = Math.hypot(ex, ez)
+      const len = Math.hypot(run, ey)
+      if (len < 1e-3) continue
+      _euler.set(-Math.atan2(ey, run), Math.atan2(ex, ez), 0, 'YXZ')
+      _quat.setFromEuler(_euler)
+      // Box center: half a deck below the surface, along the rotated up axis.
+      _up.set(0, 1, 0).applyQuaternion(_quat)
+      const hy = BRIDGE_DECK_HALF
+      for (const [lat, top, halfW] of BRIDGE_BOXES) {
+        _side.set(1, 0, 0).applyQuaternion(_quat)
+        const k = top - hy
+        world.createCollider(
+          rapier.ColliderDesc.cuboid(halfW, hy, len / 2 + 0.05)
+            .setTranslation(
+              ax + ex / 2 + _side.x * lat + _up.x * k,
+              ay + ey / 2 + _side.y * lat + _up.y * k,
+              az + ez / 2 + _side.z * lat + _up.z * k,
+            )
+            .setRotation(_quat)
+            .setFriction(1),
+          body,
+        )
+      }
+    }
     chunk.body = body
   }
 

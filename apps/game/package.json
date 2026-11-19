@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "typecheck": "tsc -b",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "overview": "node scripts/road-overview.mjs"
   },
   "dependencies": {
     "@dimforge/rapier3d": "^0.21.0",

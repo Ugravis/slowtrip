@@ -46,6 +46,7 @@ function startMapLoop(
     northMarker: false,
     layer: 'terrain',
     labels: false,
+    overview: null,
   }
   const markers: MinimapMarker[] = game.vehicles.entities.map(() => ({
     x: 0,
