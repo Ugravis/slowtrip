@@ -245,8 +245,8 @@ function limitGrade(
 }
 
 function blurPasses(v: Float64Array, radius: number, passes: number): Float64Array {
-  let a = v
-  let b = new Float64Array(v.length)
+  let a: Float64Array = v
+  let b: Float64Array = new Float64Array(v.length)
   for (let p = 0; p < passes; p++) {
     blur(a, b, radius)
     const t = a
